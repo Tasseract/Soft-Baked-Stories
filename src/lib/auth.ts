@@ -2,6 +2,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { supabaseSecret } from "./supabase";
 
 export const SESSION_COOKIE = "sbs_admin";
 
@@ -9,7 +10,7 @@ export const SESSION_COOKIE = "sbs_admin";
 export function sessionToken() {
   const password = process.env.ADMIN_PASSWORD;
   if (!password) return null;
-  return createHmac("sha256", password + (process.env.SUPABASE_SECRET_KEY ?? ""))
+  return createHmac("sha256", password + (supabaseSecret() ?? ""))
     .update("soft-baked-stories-admin")
     .digest("hex");
 }
