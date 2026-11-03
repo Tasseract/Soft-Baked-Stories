@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #fbf5f1;
+  --color-blush: #f6d3dc;
+  --color-petal: #e8a7b8;
+  --color-rose: #c65f7c;
+  --color-rose-deep: #a8445f;
+  --color-cocoa: #4a2b20;
+  --color-cocoa-soft: #7a5546;
+  --font-display: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-cocoa);
+  min-height: 100dvh;
+}
+
+/* Soft floating colour blobs behind the frosted glass */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background:
+    radial-gradient(60vmax 60vmax at 0% 0%, #fbd9e2 0%, transparent 60%),
+    radial-gradient(50vmax 50vmax at 100% 10%, #ffe6d2 0%, transparent 55%),
+    radial-gradient(55vmax 55vmax at 80% 100%, #f3c9d6 0%, transparent 60%),
+    radial-gradient(45vmax 45vmax at 10% 90%, #fff0e4 0%, transparent 60%),
+    var(--color-cream);
+}
+.backdrop::before,
+.backdrop::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  opacity: 0.55;
+  animation: drift 22s ease-in-out infinite alternate;
+}
+.backdrop::before {
+  width: 38vmax;
+  height: 38vmax;
+  left: 55%;
+  top: 25%;
+  background: #f2a9bf;
+}
+.backdrop::after {
+  width: 30vmax;
+  height: 30vmax;
+  left: 5%;
+  top: 45%;
+  background: #f7c9a6;
+  animation-delay: -11s;
+}
+@keyframes drift {
+  to {
+    transform: translate(-6vmax, -4vmax) scale(1.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .backdrop::before,
+  .backdrop::after {
+    animation: none;
+  }
+}
+
+@utility glass {
+  background: rgb(255 255 255 / 0.42);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid rgb(255 255 255 / 0.7);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.8) inset,
+    0 18px 40px -18px rgb(122 60 75 / 0.28);
+}
+
+@utility glass-strong {
+  background: rgb(255 255 255 / 0.66);
+  backdrop-filter: blur(26px) saturate(170%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  border: 1px solid rgb(255 255 255 / 0.85);
+  box-shadow: 0 24px 60px -20px rgb(122 60 75 / 0.35);
+}
+
+@utility field {
+  width: 100%;
+  border-radius: 0.9rem;
+  background: rgb(255 255 255 / 0.6);
+  border: 1px solid rgb(255 255 255 / 0.9);
+  padding: 0.7rem 0.9rem;
+  color: var(--color-cocoa);
+  outline: none;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  &::placeholder {
+    color: rgb(122 85 70 / 0.55);
+  }
+  &:focus {
+    border-color: var(--color-petal);
+    box-shadow: 0 0 0 4px rgb(232 167 184 / 0.35);
+  }
+}
+
+@utility dotted-rule {
+  background-image: radial-gradient(circle, var(--color-petal) 1.4px, transparent 1.6px);
+  background-size: 9px 4px;
+  background-repeat: repeat-x;
+  height: 4px;
+}
