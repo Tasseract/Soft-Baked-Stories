@@ -1,5 +1,21 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {};
+// Product photos uploaded from the dashboard are served from Supabase Storage
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseHost = supabaseUrl ? new URL(supabaseUrl) : null;
+
+const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" },
+      ...(supabaseHost && !supabaseHost.hostname.endsWith(".supabase.co")
+        ? [{ protocol: supabaseHost.protocol.replace(":", "") as "http" | "https", hostname: supabaseHost.hostname, port: supabaseHost.port, pathname: "/storage/v1/object/public/**" }]
+        : []),
+    ],
+  },
+  experimental: {
+    serverActions: { bodySizeLimit: "4mb" },
+  },
+};
 
 export default nextConfig;

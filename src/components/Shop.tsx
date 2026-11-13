@@ -3,18 +3,19 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Banknote, Check, Minus, Plus, QrCode, ShoppingBag, X } from "lucide-react";
-import { PRODUCTS, findOption, peso, type Product } from "@/lib/menu";
+import { Banknote, Check, CloudOff, Minus, Plus, QrCode, ShoppingBag, X } from "lucide-react";
+import { findOption, peso, type Product } from "@/lib/menu";
 
 type Cart = Record<string, number>; // "productId:optionId" -> quantity
 type Payment = "cod" | "qr";
 
 const CART_KEY = "sbs-cart";
-const categories = ["All", "Muffins", "Breads"] as const;
+const MAX_ATTEMPTS = 5;
+const ATTEMPT_TIMEOUT_MS = 15_000;
 
-export default function Shop() {
+export default function Shop({ products }: { products: Product[] }) {
   const [cart, setCart] = useState<Cart>({});
-  const [filter, setFilter] = useState<(typeof categories)[number]>("All");
+  const [filter, setFilter] = useState("All");
   const [open, setOpen] = useState(false);
   const [placed, setPlaced] = useState<{ code: string; total: number } | null>(null);
 
@@ -39,10 +40,10 @@ export default function Shop() {
     () =>
       Object.entries(cart).flatMap(([key, quantity]) => {
         const [productId, optionId] = key.split(":");
-        const found = findOption(productId, optionId);
+        const found = findOption(products, productId, optionId);
         return found && quantity > 0 ? [{ key, quantity, ...found }] : [];
       }),
-    [cart],
+    [cart, products],
   );
   const count = lines.reduce((n, l) => n + l.quantity, 0);
   const total = lines.reduce((n, l) => n + l.quantity * l.option.price, 0);
@@ -55,7 +56,8 @@ export default function Shop() {
       return next;
     });
 
-  const shown = PRODUCTS.filter((p) => filter === "All" || p.category === filter);
+  const categories = ["All", ...new Set(products.map((p) => p.category))];
+  const shown = products.filter((p) => filter === "All" || p.category === filter);
 
   return (
     <section id="menu" className="scroll-mt-28 pt-10">
@@ -66,21 +68,23 @@ export default function Shop() {
           </h2>
           <p className="mt-2 text-cocoa-soft">Baked fresh to order. Mix and match as much as you like.</p>
         </div>
-        <div className="glass flex rounded-full p-1" role="tablist">
-          {categories.map((c) => (
-            <button
-              key={c}
-              role="tab"
-              aria-selected={filter === c}
-              onClick={() => setFilter(c)}
-              className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
-                filter === c ? "bg-rose text-white shadow" : "text-cocoa-soft hover:text-cocoa"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
+        {categories.length > 2 && (
+          <div className="glass flex rounded-full p-1" role="tablist">
+            {categories.map((c) => (
+              <button
+                key={c}
+                role="tab"
+                aria-selected={filter === c}
+                onClick={() => setFilter(c)}
+                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                  filter === c ? "bg-rose text-white shadow" : "text-cocoa-soft hover:text-cocoa"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="dotted-rule mt-6" />
 
@@ -94,7 +98,7 @@ export default function Shop() {
         <div className="fixed inset-x-0 bottom-4 z-30 px-4">
           <button
             onClick={() => setOpen(true)}
-            className="glass-strong mx-auto flex w-full max-w-md items-center justify-between rounded-full py-2 pr-2 pl-5 transition hover:scale-[1.01]"
+            className="glass-strong mx-auto flex w-full max-w-md items-center justify-between rounded-full py-2 pr-2 pl-5 transition active:scale-[0.98]"
           >
             <span className="flex items-center gap-2 font-bold">
               <ShoppingBag className="size-5 text-rose" />
@@ -135,7 +139,7 @@ function ProductCard({
   setQty: (key: string, q: number) => void;
 }) {
   return (
-    <article className="glass group flex flex-col rounded-[2rem] p-5 transition hover:-translate-y-1 hover:bg-white/55">
+    <article className="glass group flex flex-col rounded-[2rem] p-5 transition hover:-translate-y-1">
       <div className="relative grid h-52 place-items-center">
         <div className="absolute inset-x-8 bottom-3 h-6 rounded-full bg-cocoa/15 blur-xl" />
         <Image
@@ -153,7 +157,7 @@ function ProductCard({
           const key = `${product.id}:${o.id}`;
           const qty = cart[key] ?? 0;
           return (
-            <div key={o.id} className="flex items-center justify-between gap-3 rounded-2xl bg-white/45 py-2 pr-2 pl-4">
+            <div key={o.id} className="flex items-center justify-between gap-3 rounded-2xl bg-surface/45 py-2 pr-2 pl-4">
               <div className="leading-tight">
                 <div className="font-display text-xl font-bold text-rose">{peso(o.price)}</div>
                 <div className="text-xs font-semibold tracking-wide text-cocoa-soft uppercase">{o.label}</div>
@@ -161,7 +165,7 @@ function ProductCard({
               {qty === 0 ? (
                 <button
                   onClick={() => setQty(key, 1)}
-                  className="flex items-center gap-1.5 rounded-full bg-cocoa px-4 py-2 text-sm font-bold text-white transition hover:bg-rose"
+                  className="flex min-h-10 items-center gap-1.5 rounded-full bg-cocoa px-4 py-2 text-sm font-bold text-cream transition hover:bg-rose hover:text-white active:scale-95"
                 >
                   <Plus className="size-4" /> Add
                 </button>
@@ -178,12 +182,16 @@ function ProductCard({
 
 function Stepper({ qty, onChange, label }: { qty: number; onChange: (q: number) => void; label: string }) {
   return (
-    <div className="flex items-center gap-1 rounded-full bg-white/80 p-1 shadow-sm">
-      <button aria-label={`Remove one ${label}`} onClick={() => onChange(qty - 1)} className="grid size-8 place-items-center rounded-full hover:bg-blush">
+    <div className="flex items-center gap-1 rounded-full bg-surface/80 p-1 shadow-sm">
+      <button aria-label={`Remove one ${label}`} onClick={() => onChange(qty - 1)} className="grid size-9 place-items-center rounded-full hover:bg-blush active:scale-90">
         <Minus className="size-4" />
       </button>
       <span className="w-6 text-center font-bold tabular-nums">{qty}</span>
-      <button aria-label={`Add one ${label}`} onClick={() => onChange(qty + 1)} className="grid size-8 place-items-center rounded-full bg-rose text-white hover:bg-rose-deep">
+      <button
+        aria-label={`Add one ${label}`}
+        onClick={() => onChange(qty + 1)}
+        className="grid size-9 place-items-center rounded-full bg-rose text-white hover:bg-rose-deep active:scale-90"
+      >
         <Plus className="size-4" />
       </button>
     </div>
@@ -191,6 +199,51 @@ function Stepper({ qty, onChange, label }: { qty: number; onChange: (q: number) 
 }
 
 type Line = { key: string; quantity: number; product: Product; option: Product["options"][number] };
+
+// crypto.randomUUID only exists on https/localhost; fall back for testing over a local network
+function newRef() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type Outcome = { code: string } | { error: string } | { busy: true };
+
+/**
+ * Sends the order, quietly retrying network failures and server errors with backoff.
+ * The same client_ref goes with every attempt, so the server never saves an order twice.
+ */
+async function sendOrder(payload: object, onAttempt: (n: number) => void): Promise<Outcome> {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    onAttempt(attempt);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.code) return { code: data.code };
+      // Problems with what the customer typed won't fix themselves, so show them straight away
+      if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429)
+        return { error: data.error ?? "Please check your details and try again." };
+    } catch {
+      // network error or timeout: retry
+    } finally {
+      clearTimeout(timer);
+    }
+    if (attempt < MAX_ATTEMPTS) await wait(700 * 2 ** (attempt - 1));
+  }
+  return { busy: true };
+}
 
 function Checkout({
   lines,
@@ -208,59 +261,57 @@ function Checkout({
   onPlaced: (code: string) => void;
 }) {
   const [payment, setPayment] = useState<Payment>("cod");
-  const [submitting, setSubmitting] = useState(false);
+  const [attempt, setAttempt] = useState(0); // 0 = idle
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [clientRef] = useState(newRef);
+  const submitting = attempt > 0;
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !submitting && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, submitting]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submitting) return;
     setError(null);
-    setSubmitting(true);
     const form = new FormData(e.currentTarget);
-    try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: lines.map((l) => ({ product_id: l.product.id, option: l.option.id, quantity: l.quantity })),
-          customer_name: form.get("name"),
-          phone: form.get("phone"),
-          address: form.get("address"),
-          notes: form.get("notes"),
-          payment_method: payment,
-          payment_reference: form.get("reference"),
-          website: form.get("website"),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Something went wrong. Please try again.");
-      onPlaced(data.code);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    const outcome = await sendOrder(
+      {
+        client_ref: clientRef,
+        items: lines.map((l) => ({ product_id: l.product.id, option: l.option.id, quantity: l.quantity })),
+        customer_name: form.get("name"),
+        phone: form.get("phone"),
+        address: form.get("address"),
+        notes: form.get("notes"),
+        payment_method: payment,
+        payment_reference: form.get("reference"),
+        website: form.get("website"),
+      },
+      setAttempt,
+    );
+    setAttempt(0);
+    if ("code" in outcome) onPlaced(outcome.code);
+    else if ("error" in outcome) setError(outcome.error);
+    else setBusy(true);
   }
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" aria-label="Checkout">
-      <button aria-label="Close checkout" onClick={onClose} className="absolute inset-0 bg-cocoa/25 backdrop-blur-sm" />
-      <div className="glass-strong relative flex h-full w-full max-w-lg flex-col overflow-y-auto rounded-l-[2rem] p-6 sm:p-8">
+      <button aria-label="Close checkout" onClick={() => !submitting && onClose()} className="absolute inset-0 bg-cocoa/25" />
+      <div className="drawer-in glass-strong relative flex h-full w-full max-w-lg flex-col overflow-y-auto overscroll-contain rounded-l-[2rem] p-6 sm:p-8">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-3xl font-bold">{placed ? "Order placed!" : "Your order"}</h2>
-          <button aria-label="Close" onClick={onClose} className="grid size-10 place-items-center rounded-full bg-white/70 hover:bg-blush">
+          <button aria-label="Close" onClick={onClose} disabled={submitting} className="grid size-11 place-items-center rounded-full bg-surface/70 hover:bg-blush">
             <X className="size-5" />
           </button>
         </div>
 
         {placed ? (
           <div className="flex flex-1 flex-col items-center justify-center text-center">
-            <div className="grid size-20 place-items-center rounded-full bg-rose text-white shadow-lg shadow-rose/40">
+            <div className="pop-in grid size-20 place-items-center rounded-full bg-rose text-white shadow-lg shadow-rose/40">
               <Check className="size-10" />
             </div>
             <p className="font-display mt-6 text-2xl font-bold">Thank you!</p>
@@ -268,7 +319,7 @@ function Checkout({
               Your order <b className="text-cocoa">{placed.code}</b> for <b className="text-cocoa">{peso(placed.total)}</b> is in.
               We&apos;ll text you shortly to confirm the delivery time.
             </p>
-            <button onClick={onClose} className="mt-8 rounded-full bg-cocoa px-6 py-3 font-bold text-white hover:bg-rose">
+            <button onClick={onClose} className="mt-8 rounded-full bg-cocoa px-6 py-3 font-bold text-cream hover:bg-rose hover:text-white">
               Back to the menu
             </button>
           </div>
@@ -276,74 +327,76 @@ function Checkout({
           <p className="mt-10 text-center text-cocoa-soft">Your bag is empty.</p>
         ) : (
           <form onSubmit={submit} className="mt-6 flex flex-1 flex-col gap-6">
-            <ul className="space-y-3">
-              {lines.map((l) => (
-                <li key={l.key} className="flex items-center gap-3 rounded-2xl bg-white/50 p-2 pr-3">
-                  <Image src={l.product.image} alt="" width={64} height={64} className="size-14 object-contain" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-bold">{l.product.name}</p>
-                    <p className="text-sm text-cocoa-soft">
-                      {l.option.label} · {peso(l.option.price)}
-                    </p>
-                  </div>
-                  <Stepper qty={l.quantity} onChange={(q) => setQty(l.key, q)} label={`${l.product.name} ${l.option.label}`} />
-                </li>
-              ))}
-            </ul>
-
-            <fieldset className="space-y-3">
-              <legend className="font-display mb-2 text-lg font-semibold">Delivery details</legend>
-              <input name="name" required maxLength={80} autoComplete="name" placeholder="Full name" className="field" />
-              <input
-                name="phone"
-                required
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                pattern="^(\+?63|0)9\d{2}[\s-]?\d{3}[\s-]?\d{4}$"
-                title="Philippine mobile number, e.g. 0917 123 4567"
-                placeholder="Mobile number (0917 123 4567)"
-                className="field"
-              />
-              <textarea name="address" required maxLength={400} rows={3} autoComplete="street-address" placeholder="Complete delivery address" className="field resize-none" />
-              <input name="notes" maxLength={300} placeholder="Notes (optional) — landmarks, preferred time…" className="field" />
-              {/* Honeypot: real customers never see or fill this */}
-              <input name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />
-            </fieldset>
-
-            <fieldset>
-              <legend className="font-display mb-2 text-lg font-semibold">Payment</legend>
-              <div className="grid grid-cols-2 gap-3">
-                {(
-                  [
-                    ["cod", "Cash on delivery", Banknote],
-                    ["qr", "Scan QR to pay", QrCode],
-                  ] as const
-                ).map(([value, label, Icon]) => (
-                  <label
-                    key={value}
-                    className={`flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center text-sm font-bold transition ${
-                      payment === value ? "border-rose bg-white/80 text-rose" : "border-transparent bg-white/45 hover:bg-white/65"
-                    }`}
-                  >
-                    <input type="radio" name="payment" value={value} checked={payment === value} onChange={() => setPayment(value)} className="sr-only" />
-                    <Icon className="size-6" />
-                    {label}
-                  </label>
+            <fieldset disabled={submitting} className="contents">
+              <ul className="space-y-3">
+                {lines.map((l) => (
+                  <li key={l.key} className="flex items-center gap-3 rounded-2xl bg-surface/50 p-2 pr-3">
+                    <Image src={l.product.image} alt="" width={64} height={64} loading="eager" className="size-14 object-contain" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold">{l.product.name}</p>
+                      <p className="text-sm text-cocoa-soft">
+                        {l.option.label} · {peso(l.option.price)}
+                      </p>
+                    </div>
+                    <Stepper qty={l.quantity} onChange={(q) => setQty(l.key, q)} label={`${l.product.name} ${l.option.label}`} />
+                  </li>
                 ))}
+              </ul>
+
+              <div className="space-y-3">
+                <p className="font-display mb-2 text-lg font-semibold">Delivery details</p>
+                <input name="name" required maxLength={80} autoComplete="name" placeholder="Full name" className="field" />
+                <input
+                  name="phone"
+                  required
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  pattern="^(\+?63|0)9\d{2}[\s-]?\d{3}[\s-]?\d{4}$"
+                  title="Philippine mobile number, e.g. 0917 123 4567"
+                  placeholder="Mobile number (0917 123 4567)"
+                  className="field"
+                />
+                <textarea name="address" required maxLength={400} rows={3} autoComplete="street-address" placeholder="Complete delivery address" className="field resize-none" />
+                <input name="notes" maxLength={300} placeholder="Notes (optional) — landmarks, preferred time…" className="field" />
+                {/* Honeypot: real customers never see or fill this */}
+                <input name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />
               </div>
-              {payment === "qr" && (
-                <div className="mt-4 flex flex-col items-center rounded-2xl bg-white/70 p-5 text-center">
-                  <div className="rounded-2xl bg-white p-3 shadow-sm">
-                    <QRCodeSVG value={`SOFTBAKEDSTORIES-MOCK|amount=${total}`} size={168} fgColor="#4a2b20" />
-                  </div>
-                  <p className="mt-3 text-sm text-cocoa-soft">
-                    Scan to pay <b className="text-cocoa">{peso(total)}</b>, then enter the reference number below.
-                  </p>
-                  <span className="mt-1 rounded-full bg-blush px-2 py-0.5 text-[11px] font-bold tracking-wide text-rose uppercase">Demo QR — not a real account</span>
-                  <input name="reference" required maxLength={60} placeholder="Payment reference number" className="field mt-4 text-center" />
+
+              <div>
+                <p className="font-display mb-2 text-lg font-semibold">Payment</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(
+                    [
+                      ["cod", "Cash on delivery", Banknote],
+                      ["qr", "Scan QR to pay", QrCode],
+                    ] as const
+                  ).map(([value, label, Icon]) => (
+                    <label
+                      key={value}
+                      className={`flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center text-sm font-bold transition ${
+                        payment === value ? "border-rose bg-surface/80 text-rose" : "border-transparent bg-surface/45 hover:bg-surface/65"
+                      }`}
+                    >
+                      <input type="radio" name="payment" value={value} checked={payment === value} onChange={() => setPayment(value)} className="sr-only" />
+                      <Icon className="size-6" />
+                      {label}
+                    </label>
+                  ))}
                 </div>
-              )}
+                {payment === "qr" && (
+                  <div className="mt-4 flex flex-col items-center rounded-2xl bg-surface/70 p-5 text-center">
+                    <div className="rounded-2xl bg-white p-3 shadow-sm">
+                      <QRCodeSVG value={`SOFTBAKEDSTORIES-MOCK|amount=${total}`} size={168} fgColor="#4a2b20" />
+                    </div>
+                    <p className="mt-3 text-sm text-cocoa-soft">
+                      Scan to pay <b className="text-cocoa">{peso(total)}</b>, then enter the reference number below.
+                    </p>
+                    <span className="mt-1 rounded-full bg-blush px-2 py-0.5 text-[11px] font-bold tracking-wide text-rose uppercase">Demo QR — not a real account</span>
+                    <input name="reference" required maxLength={60} placeholder="Payment reference number" className="field mt-4 text-center" />
+                  </div>
+                )}
+              </div>
             </fieldset>
 
             <div className="mt-auto space-y-3">
@@ -354,13 +407,52 @@ function Checkout({
               </div>
               <button
                 disabled={submitting}
-                className="w-full rounded-full bg-rose py-4 text-lg font-bold text-white shadow-lg shadow-rose/30 transition hover:bg-rose-deep disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-3 rounded-full bg-rose py-4 text-lg font-bold text-white shadow-lg shadow-rose/30 transition hover:bg-rose-deep active:scale-[0.98] disabled:opacity-80"
               >
+                {submitting && <span className="spinner" aria-hidden />}
                 {submitting ? "Placing order…" : "Place order"}
               </button>
             </div>
           </form>
         )}
+
+        {submitting && <PlacingOverlay attempt={attempt} />}
+        {busy && <BusyDialog onClose={() => setBusy(false)} />}
+      </div>
+    </div>
+  );
+}
+
+function PlacingOverlay({ attempt }: { attempt: number }) {
+  return (
+    <div className="fade-in absolute inset-0 z-10 flex flex-col items-center justify-center rounded-l-[2rem] bg-cream/70 text-center backdrop-blur-sm" role="status" aria-live="polite">
+      <Image src="/images/choco-lava-muffin.png" alt="" width={120} height={124} className="muffin-bounce w-24 drop-shadow-xl" />
+      <div className="mt-2 h-2 w-16 rounded-full bg-cocoa/15 blur-[2px]" />
+      <p className="font-display mt-5 text-2xl font-bold">Placing your order…</p>
+      <p className="mt-1 text-sm text-cocoa-soft">{attempt <= 1 ? "Just a moment." : "Still working on it, hang tight."}</p>
+      <div className="mt-5 flex gap-1.5" aria-hidden>
+        <span className="dot" />
+        <span className="dot [animation-delay:150ms]" />
+        <span className="dot [animation-delay:300ms]" />
+      </div>
+    </div>
+  );
+}
+
+function BusyDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fade-in absolute inset-0 z-20 grid place-items-center rounded-l-[2rem] bg-cocoa/30 p-6" role="alertdialog" aria-modal="true" aria-labelledby="busy-title">
+      <div className="pop-in glass-strong w-full max-w-xs rounded-3xl p-6 text-center">
+        <div className="mx-auto grid size-14 place-items-center rounded-full bg-blush text-rose">
+          <CloudOff className="size-7" />
+        </div>
+        <p id="busy-title" className="font-display mt-4 text-xl font-bold">
+          The server may be busy
+        </p>
+        <p className="mt-1 text-sm text-cocoa-soft">Please try again in a few minutes! Your bag and details are saved.</p>
+        <button onClick={onClose} autoFocus className="mt-5 w-full rounded-full bg-rose py-3 font-bold text-white active:scale-[0.98]">
+          Okay
+        </button>
       </div>
     </div>
   );

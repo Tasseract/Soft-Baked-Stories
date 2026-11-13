@@ -1,15 +1,17 @@
-export type Option = { id: "pc" | "box" | "loaf"; label: string; price: number };
+export type Option = { id: string; label: string; price: number };
 
 export type Product = {
   id: string;
   name: string;
   description: string;
   image: string;
-  category: "Muffins" | "Breads";
+  category: string;
   options: Option[];
+  active?: boolean;
 };
 
-export const PRODUCTS: Product[] = [
+// The original menu: seeds the database and stands in if the database can't be reached
+export const DEFAULT_PRODUCTS: Product[] = [
   {
     id: "choco-lava-muffin",
     name: "Choco Lava Muffins",
@@ -78,11 +80,21 @@ export const PRODUCTS: Product[] = [
   },
 ];
 
-export function findOption(productId: string, optionId: string) {
-  const product = PRODUCTS.find((p) => p.id === productId);
+export function findOption(products: Product[], productId: string, optionId: string) {
+  const product = products.find((p) => p.id === productId);
   const option = product?.options.find((o) => o.id === optionId);
   return product && option ? { product, option } : null;
 }
 
 export const peso = (n: number) =>
   "₱" + n.toLocaleString("en-PH", { maximumFractionDigits: 2 });
+
+export const PLACEHOLDER_IMAGE = "/images/placeholder.svg";
+
+export const slugify = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);

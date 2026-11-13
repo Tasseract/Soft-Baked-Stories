@@ -19,11 +19,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <AdminNav />
           </div>
           <div className="flex items-center gap-1">
-            <Link href="/" className="grid size-10 place-items-center rounded-full hover:bg-white/60" title="View shop">
+            <Link href="/" className="grid size-10 place-items-center rounded-full hover:bg-surface/60" title="View shop">
               <Store className="size-5" />
             </Link>
             <form action={logout}>
-              <button className="grid size-10 place-items-center rounded-full hover:bg-white/60" title="Sign out">
+              <button className="grid size-10 place-items-center rounded-full hover:bg-surface/60" title="Sign out">
                 <LogOut className="size-5" />
               </button>
             </form>

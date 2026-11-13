@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fredoka, Nunito } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { getTheme } from "@/lib/catalog";
 import "./globals.css";
 
 const fredoka = Fredoka({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-fredoka" });
@@ -13,11 +14,17 @@ export const metadata: Metadata = {
   icons: { icon: "/images/logo.png" },
 };
 
-export const viewport: Viewport = { themeColor: "#fbf5f1" };
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbf5f1" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1311" },
+  ],
+};
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const theme = await getTheme();
   return (
-    <html lang="en" data-scroll-behavior="smooth" className={`${fredoka.variable} ${nunito.variable}`}>
+    <html lang="en" data-theme={theme} data-scroll-behavior="smooth" className={`${fredoka.variable} ${nunito.variable}`}>
       <body className="font-sans antialiased">
         <div className="backdrop" aria-hidden />
         {children}

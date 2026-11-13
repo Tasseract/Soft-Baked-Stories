@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
-@theme {
+@theme static {
   --color-cream: #fbf5f1;
+  --color-surface: #ffffff;
   --color-blush: #f6d3dc;
   --color-petal: #e8a7b8;
   --color-rose: #c65f7c;
@@ -10,6 +11,56 @@
   --color-cocoa-soft: #7a5546;
   --font-display: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+
+  --blob-1: #fbd9e2;
+  --blob-2: #ffe6d2;
+  --blob-3: #f3c9d6;
+  --blob-4: #fff0e4;
+  --blob-a: #f2a9bf;
+  --blob-b: #f7c9a6;
+  --glass-shadow: rgb(122 60 75 / 0.28);
+}
+
+/* Dark theme: chosen in Admin → Settings ("dark", or "auto" to follow each visitor's device) */
+@layer theme {
+  :root[data-theme="dark"] {
+    --color-cream: #1c1311;
+    --color-surface: #3a2823;
+    --color-blush: #52303a;
+    --color-petal: #b46a80;
+    --color-rose: #e07c98;
+    --color-rose-deep: #c65f7c;
+    --color-cocoa: #f7e9e3;
+    --color-cocoa-soft: #c9ada2;
+    --blob-1: #3b1f28;
+    --blob-2: #3a2519;
+    --blob-3: #43202d;
+    --blob-4: #2a1a14;
+    --blob-a: #6d2c42;
+    --blob-b: #5a3420;
+    --glass-shadow: rgb(0 0 0 / 0.5);
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="auto"] {
+      --color-cream: #1c1311;
+      --color-surface: #3a2823;
+      --color-blush: #52303a;
+      --color-petal: #b46a80;
+      --color-rose: #e07c98;
+      --color-rose-deep: #c65f7c;
+      --color-cocoa: #f7e9e3;
+      --color-cocoa-soft: #c9ada2;
+      --blob-1: #3b1f28;
+      --blob-2: #3a2519;
+      --blob-3: #43202d;
+      --blob-4: #2a1a14;
+      --blob-a: #6d2c42;
+      --blob-b: #5a3420;
+      --glass-shadow: rgb(0 0 0 / 0.5);
+      color-scheme: dark;
+    }
+  }
 }
 
 html {
@@ -22,17 +73,30 @@ body {
   min-height: 100dvh;
 }
 
-/* Soft floating colour blobs behind the frosted glass */
+/* Taps register immediately on touch screens: no double-tap-to-zoom wait, no grey flash */
+button,
+a,
+label,
+summary,
+[role="tab"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+button:disabled {
+  cursor: default;
+}
+
+/* Soft colour blobs behind the frosted glass */
 .backdrop {
   position: fixed;
   inset: 0;
   z-index: -1;
   overflow: hidden;
   background:
-    radial-gradient(60vmax 60vmax at 0% 0%, #fbd9e2 0%, transparent 60%),
-    radial-gradient(50vmax 50vmax at 100% 10%, #ffe6d2 0%, transparent 55%),
-    radial-gradient(55vmax 55vmax at 80% 100%, #f3c9d6 0%, transparent 60%),
-    radial-gradient(45vmax 45vmax at 10% 90%, #fff0e4 0%, transparent 60%),
+    radial-gradient(60vmax 60vmax at 0% 0%, var(--blob-1) 0%, transparent 60%),
+    radial-gradient(50vmax 50vmax at 100% 10%, var(--blob-2) 0%, transparent 55%),
+    radial-gradient(55vmax 55vmax at 80% 100%, var(--blob-3) 0%, transparent 60%),
+    radial-gradient(45vmax 45vmax at 10% 90%, var(--blob-4) 0%, transparent 60%),
     var(--color-cream);
 }
 .backdrop::before,
@@ -42,68 +106,86 @@ body {
   border-radius: 9999px;
   filter: blur(60px);
   opacity: 0.55;
-  animation: drift 22s ease-in-out infinite alternate;
 }
 .backdrop::before {
   width: 38vmax;
   height: 38vmax;
   left: 55%;
   top: 25%;
-  background: #f2a9bf;
+  background: var(--blob-a);
 }
 .backdrop::after {
   width: 30vmax;
   height: 30vmax;
   left: 5%;
   top: 45%;
-  background: #f7c9a6;
-  animation-delay: -11s;
+  background: var(--blob-b);
+}
+/*
+ * The drifting blobs force every frosted panel to re-blur each frame, which makes
+ * tablets and phones lag. Animate only on desktops with a mouse.
+ */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .backdrop::before,
+  .backdrop::after {
+    animation: drift 22s ease-in-out infinite alternate;
+  }
+  .backdrop::after {
+    animation-delay: -11s;
+  }
 }
 @keyframes drift {
   to {
     transform: translate(-6vmax, -4vmax) scale(1.12);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .backdrop::before,
-  .backdrop::after {
-    animation: none;
-  }
-}
 
 @utility glass {
-  background: rgb(255 255 255 / 0.42);
   backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  border: 1px solid rgb(255 255 255 / 0.7);
+  background: color-mix(in srgb, var(--color-surface) 42%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-surface) 70%, transparent);
   box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.8) inset,
-    0 18px 40px -18px rgb(122 60 75 / 0.28);
+    0 1px 0 color-mix(in srgb, var(--color-surface) 80%, transparent) inset,
+    0 18px 40px -18px var(--glass-shadow);
 }
 
 @utility glass-strong {
-  background: rgb(255 255 255 / 0.66);
   backdrop-filter: blur(26px) saturate(170%);
-  -webkit-backdrop-filter: blur(26px) saturate(170%);
-  border: 1px solid rgb(255 255 255 / 0.85);
-  box-shadow: 0 24px 60px -20px rgb(122 60 75 / 0.35);
+  background: color-mix(in srgb, var(--color-surface) 66%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-surface) 85%, transparent);
+  box-shadow: 0 24px 60px -20px var(--glass-shadow);
+}
+
+/* Only the unprefixed backdrop-filter is written: the CSS compiler adds the Safari prefix, and keeping both made it drop the standard one */
+/* Touch devices: a lighter blur keeps scrolling and tapping smooth on tablets and phones */
+@media (pointer: coarse) {
+  .glass {
+    backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--color-surface) 58%, transparent);
+  }
+  .glass-strong {
+    backdrop-filter: blur(14px);
+    background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  }
 }
 
 @utility field {
   width: 100%;
   border-radius: 0.9rem;
-  background: rgb(255 255 255 / 0.6);
-  border: 1px solid rgb(255 255 255 / 0.9);
+  background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-surface) 90%, transparent);
   padding: 0.7rem 0.9rem;
   color: var(--color-cocoa);
   outline: none;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition:
+    box-shadow 0.15s,
+    border-color 0.15s;
   &::placeholder {
-    color: rgb(122 85 70 / 0.55);
+    color: color-mix(in srgb, var(--color-cocoa-soft) 70%, transparent);
   }
   &:focus {
     border-color: var(--color-petal);
-    box-shadow: 0 0 0 4px rgb(232 167 184 / 0.35);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-petal) 35%, transparent);
   }
 }
 
@@ -112,4 +194,101 @@ body {
   background-size: 9px 4px;
   background-repeat: repeat-x;
   height: 4px;
+}
+
+/* ─── Small motion helpers ─── */
+
+@layer components {
+  .spinner {
+    width: 1.15em;
+    height: 1.15em;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    border: 2.5px solid rgb(255 255 255 / 0.4);
+    border-top-color: #fff;
+    animation: spin 0.7s linear infinite;
+  }
+  .spinner-dark {
+    border-color: color-mix(in srgb, var(--color-cocoa) 25%, transparent);
+    border-top-color: var(--color-cocoa);
+  }
+  .spinner-cream {
+    border-color: color-mix(in srgb, var(--color-cream) 35%, transparent);
+    border-top-color: var(--color-cream);
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 9999px;
+  background: var(--color-rose);
+  animation: dot 0.9s ease-in-out infinite;
+}
+@keyframes dot {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.muffin-bounce {
+  animation: muffin 0.9s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+@keyframes muffin {
+  from {
+    transform: translateY(0) rotate(-3deg);
+  }
+  to {
+    transform: translateY(-18px) rotate(3deg);
+  }
+}
+
+.fade-in {
+  animation: fade 0.18s ease-out both;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.pop-in {
+  animation: pop 0.25s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+.drawer-in {
+  animation: drawer 0.24s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+@keyframes drawer {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .muffin-bounce,
+  .drawer-in,
+  .pop-in,
+  .fade-in {
+    animation: none;
+  }
 }

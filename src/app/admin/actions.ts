@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { SESSION_COOKIE, requireAdmin, safeEqual, sessionToken } from "@/lib/auth";
 import { db } from "@/lib/supabase";
-import { DELIVERY_STATUSES, ORDER_STATUSES, PAYMENT_STATUSES } from "@/lib/orders";
+import { applyOrderPatch, type OrderPatch } from "@/lib/orders";
 
 export async function login(_: string | null, form: FormData) {
   const password = String(form.get("password") ?? "");
@@ -30,27 +30,21 @@ export async function logout() {
   redirect("/admin/login");
 }
 
-export async function updateOrder(form: FormData) {
+export async function updateOrder(id: string, patch: OrderPatch): Promise<{ error?: string }> {
   await requireAdmin();
-  const id = String(form.get("id"));
-  const patch: Record<string, string> = {};
+  const { data: current, error: readError } = await db()
+    .from("orders")
+    .select("status, delivery_status, payment_method")
+    .eq("id", id)
+    .single();
+  if (readError || !current) return { error: "Couldn't find that order. Refresh and try again." };
 
-  const status = form.get("status");
-  if (status && (ORDER_STATUSES as readonly string[]).includes(String(status))) {
-    patch.status = String(status);
-    // Completing an order means it reached the customer; cash on delivery is collected at the door
-    if (status === "completed") {
-      patch.delivery_status = "delivered";
-      if (form.get("payment_method") === "cod") patch.payment_status = "paid";
-    }
-  }
-  const delivery = form.get("delivery_status");
-  if (delivery && (DELIVERY_STATUSES as readonly string[]).includes(String(delivery))) patch.delivery_status = String(delivery);
-  const payment = form.get("payment_status");
-  if (payment && (PAYMENT_STATUSES as readonly string[]).includes(String(payment))) patch.payment_status = String(payment);
+  const result = applyOrderPatch(current, patch);
+  if ("error" in result) return result;
+  if (Object.keys(result.patch).length === 0) return {};
 
-  if (Object.keys(patch).length === 0) return;
-  const { error } = await db().from("orders").update(patch).eq("id", id);
-  if (error) throw new Error(error.message);
+  const { error } = await db().from("orders").update(result.patch).eq("id", id);
+  if (error) return { error: "Couldn't save that change. Check your connection and try again." };
   revalidatePath("/admin", "layout");
+  return {};
 }

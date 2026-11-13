@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/supabase";
-import { PRODUCTS, peso } from "@/lib/menu";
+import { peso } from "@/lib/menu";
+import { getAllProducts } from "@/lib/catalog";
 import { PAYMENT_LABEL, type Order } from "@/lib/orders";
 import { dayKey } from "@/lib/format";
 import SetupNotice from "@/components/admin/SetupNotice";
@@ -42,6 +43,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
     return <SetupNotice error={err} />;
   }
 
+  const menu = await getAllProducts();
   const revenue = sum(completed.map((o) => o.total));
   const itemsSold = sum(completed.flatMap((o) => o.items.map((i) => i.quantity)));
   const avg = completed.length ? Math.round(revenue / completed.length) : 0;
@@ -52,11 +54,17 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
   const series = buckets(bucket, since, completed);
   const peak = Math.max(1, ...series.map((b) => b.value));
 
-  // Product performance, all options of a product combined
-  const byProduct = PRODUCTS.map((p) => {
-    const lines = completed.flatMap((o) => o.items.filter((i) => i.product_id === p.id));
-    return { name: p.name, units: sum(lines.map((l) => l.quantity)), revenue: sum(lines.map((l) => l.line_total)) };
-  }).sort((a, b) => b.revenue - a.revenue);
+  // Product performance from what was actually sold, all sizes of a product combined.
+  // Current menu items with no sales are listed too, so slow sellers are visible.
+  const sales = new Map<string, { name: string; units: number; revenue: number }>();
+  for (const p of menu) sales.set(p.id, { name: p.name, units: 0, revenue: 0 });
+  for (const line of completed.flatMap((o) => o.items)) {
+    const s = sales.get(line.product_id) ?? { name: line.name, units: 0, revenue: 0 };
+    s.units += line.quantity;
+    s.revenue += line.line_total;
+    sales.set(line.product_id, s);
+  }
+  const byProduct = [...sales.values()].sort((a, b) => b.revenue - a.revenue);
   const topRevenue = Math.max(1, ...byProduct.map((p) => p.revenue));
 
   const byPayment = (["cod", "qr"] as const).map((m) => {
@@ -74,7 +82,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
               key={r}
               href={`/admin/finance?range=${r}`}
               className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
-                range === r ? "bg-cocoa text-white" : "text-cocoa-soft hover:text-cocoa"
+                range === r ? "bg-cocoa text-cream" : "text-cocoa-soft hover:text-cocoa"
               }`}
             >
               {RANGES[r].label}
@@ -121,9 +129,9 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
                 <div className="pointer-events-none absolute inset-x-0 top-0 border-t border-dashed border-cocoa/10" />
                 <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-cocoa/10" />
                 {series.map((b) => (
-                  <div key={b.key} className="group relative flex h-full flex-1 items-end justify-center hover:bg-white/30">
+                  <div key={b.key} className="group relative flex h-full flex-1 items-end justify-center hover:bg-surface/30">
                     <div className="w-full max-w-10 rounded-t-[4px] bg-rose transition group-hover:bg-rose-deep" style={{ height: `${(b.value / peak) * 100}%` }} />
-                    <div className="pointer-events-none absolute bottom-full z-10 mb-1 hidden rounded-lg bg-cocoa px-2.5 py-1.5 text-xs whitespace-nowrap text-white shadow-lg group-hover:block">
+                    <div className="pointer-events-none absolute bottom-full z-10 mb-1 hidden rounded-lg bg-cocoa px-2.5 py-1.5 text-xs whitespace-nowrap text-cream shadow-lg group-hover:block">
                       <span className="opacity-75">{b.label}</span> · <b>{peso(b.value)}</b> · {b.orders} order{b.orders === 1 ? "" : "s"}
                     </div>
                   </div>
@@ -154,10 +162,10 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
             </thead>
             <tbody>
               {byProduct.map((p) => (
-                <tr key={p.name} className="border-t border-white/60">
+                <tr key={p.name} className="border-t border-surface/60">
                   <td className="py-2.5 pr-3">
                     <p className="font-semibold">{p.name}</p>
-                    <div className="mt-1.5 h-2 rounded-full bg-white/50">
+                    <div className="mt-1.5 h-2 rounded-full bg-surface/50">
                       <div className="h-2 rounded-full bg-rose" style={{ width: `${(p.revenue / topRevenue) * 100}%` }} />
                     </div>
                   </td>
@@ -182,7 +190,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
           )}
           <ul className="mt-5 space-y-3">
             {byPayment.map((p) => (
-              <li key={p.method} className="flex items-center justify-between gap-3 rounded-2xl bg-white/45 px-4 py-3">
+              <li key={p.method} className="flex items-center justify-between gap-3 rounded-2xl bg-surface/45 px-4 py-3">
                 <span className="flex items-center gap-2.5 font-semibold">
                   <span className={`size-3 rounded-full ${p.method === "cod" ? "bg-cocoa" : "bg-rose"}`} />
                   {PAYMENT_LABEL[p.method]}

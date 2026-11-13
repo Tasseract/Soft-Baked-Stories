@@ -7,10 +7,14 @@ Next.js storefront + owner dashboard. Orders are stored in Supabase and emailed 
 | `/` | Storefront: menu, bag, checkout (cash on delivery or QR) |
 | `/admin` | Orders board: progress, delivery and payment status |
 | `/admin/finance` | Revenue, best sellers and payment split from completed orders |
+| `/admin/menu` | Edit prices and sizes, add or hide products, upload photos |
+| `/admin/settings` | Light / dark / automatic theme, delete all orders, reset the menu |
 
-## 1. Create the database table
+## 1. Set up the database
 
 Supabase → **SQL Editor** → New query → paste all of [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
+
+It creates the orders, products and settings tables, the `product-images` storage bucket, and fills the menu with the original six products. Run it again after pulling changes that touch it: it only adds what's missing and never deletes data or overwrites menu edits.
 
 ## 2. Environment variables
 
@@ -40,7 +44,7 @@ npm run dev
 
 ## Changing the menu
 
-Prices, names and photos live in [`src/lib/menu.ts`](src/lib/menu.ts); photos are in `public/images`. The server always prices orders from this file, never from the browser.
+Use **Admin → Menu**. Products live in the `products` table and photos in the `product-images` bucket. The server always prices orders from the database, never from the browser. [`src/lib/menu.ts`](src/lib/menu.ts) holds the original menu, used for **Settings → Reset the menu** and as a fallback if the database can't be reached.
 
 ## The QR code
 

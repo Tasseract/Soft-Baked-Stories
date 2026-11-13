@@ -1,7 +1,12 @@
 import Image from "next/image";
 import Shop from "@/components/Shop";
+import { getMenu } from "@/lib/catalog";
 
-export default function Home() {
+// Menu edits refresh this page right away; this is only a safety net
+export const revalidate = 300;
+
+export default async function Home() {
+  const products = await getMenu();
   return (
     <>
       <header className="sticky top-0 z-30 px-4 pt-4">
@@ -10,8 +15,8 @@ export default function Home() {
             <Image src="/images/logo.png" alt="Soft Baked Stories" width={186} height={53} priority className="h-10 w-auto" />
           </a>
           <div className="flex items-center gap-1 text-sm font-semibold sm:gap-2">
-            <a href="#menu" className="rounded-full px-3 py-2 hover:bg-white/60">Menu</a>
-            <a href="#how" className="hidden rounded-full px-3 py-2 hover:bg-white/60 sm:inline">How it works</a>
+            <a href="#menu" className="rounded-full px-3 py-2 hover:bg-surface/60">Menu</a>
+            <a href="#how" className="hidden rounded-full px-3 py-2 hover:bg-surface/60 sm:inline">How it works</a>
           </div>
         </nav>
       </header>
@@ -33,7 +38,7 @@ export default function Home() {
               <a href="#menu" className="rounded-full bg-rose px-6 py-3 font-bold text-white shadow-lg shadow-rose/30 transition hover:bg-rose-deep">
                 Order now
               </a>
-              <a href="#how" className="glass rounded-full px-6 py-3 font-bold text-cocoa transition hover:bg-white/70">
+              <a href="#how" className="glass rounded-full px-6 py-3 font-bold text-cocoa transition hover:bg-surface/70">
                 How ordering works
               </a>
             </div>
@@ -46,7 +51,7 @@ export default function Home() {
           </div>
         </section>
 
-        <Shop />
+        <Shop products={products} />
 
         <section id="how" className="mt-24 scroll-mt-28">
           <h2 className="font-display text-center text-4xl font-bold">How it works</h2>
