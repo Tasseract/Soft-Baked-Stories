@@ -5,7 +5,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { MENU_TAG } from "@/lib/catalog";
-import { slugify, type Option } from "@/lib/menu";
+import { flavorName, isMixProduct, mixId, slugify, type Option } from "@/lib/menu";
 
 const BUCKET = "product-images";
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -17,7 +17,7 @@ export type ProductInput = {
   description: string;
   category: string;
   active: boolean;
-  options: { id?: string; label: string; price: number }[];
+  options: { id?: string; label: string; price: number; mix?: [string, string] }[];
 };
 
 type Result = { error?: string; id?: string };
@@ -37,7 +37,26 @@ export async function saveProduct(input: ProductInput): Promise<Result> {
 
   const options: Option[] = [];
   const seen = new Set<string>();
-  for (const o of input.options ?? []) {
+
+  // Mix & match box: each row is a pair of flavors with its price
+  if (input.options?.some((o) => o.mix)) {
+    const { data: flavors } = await db().from("products").select("id, name, options").neq("id", input.id ?? "");
+    const names = new Map((flavors ?? []).filter((f) => !isMixProduct(f)).map((f) => [f.id as string, flavorName(f.name)]));
+    for (const o of input.options) {
+      const [a, b] = o.mix ?? [];
+      if (!a || !b || !names.has(a) || !names.has(b)) return { error: "Pick two flavors for every pairing." };
+      if (a === b) return { error: "A pairing needs two different flavors." };
+      const price = Math.round(Number(o.price));
+      const label = `${names.get(a)} + ${names.get(b)}`;
+      if (!Number.isFinite(price) || price < 1 || price > 100_000) return { error: `Check the price for ${label}.` };
+      const id = mixId(a, b);
+      if (seen.has(id)) return { error: `${label} is listed twice.` };
+      seen.add(id);
+      options.push({ id, label, price, mix: [a, b] });
+    }
+  }
+
+  for (const o of options.length ? [] : (input.options ?? [])) {
     const label = o.label?.trim().slice(0, 30);
     const price = Math.round(Number(o.price));
     if (!label) return { error: "Every size needs a name, like “Per piece” or “Box of 6”." };

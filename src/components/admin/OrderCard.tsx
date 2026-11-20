@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useOptimistic, useState, useTransition } from "react";
-import { Lock, MapPin, Phone, StickyNote } from "lucide-react";
+import { Lock, MapPin, Phone, StickyNote, Store } from "lucide-react";
 import { peso } from "@/lib/menu";
 import { when } from "@/lib/format";
 import {
   DELIVERY_STATUSES,
   PAYMENT_LABEL,
+  SOURCE_LABEL,
   STATUS_LABEL,
   applyOrderPatch,
   orderCode,
@@ -61,6 +62,11 @@ export default function OrderCard({ order }: { order: Order }) {
   const closed = o.status === "completed" || o.status === "cancelled";
   const step = PROGRESS.indexOf(o.status);
   const delivered = o.delivery_status === "delivered";
+  // POS orders the customer collects: "delivered" means picked up
+  const pickup = o.address === "Pickup";
+  const steps = pickup ? (["pending", "delivered"] as const) : DELIVERY_STATUSES;
+  const stepLabel = (d: (typeof DELIVERY_STATUSES)[number]) =>
+    pickup ? (d === "delivered" ? "Picked up" : "Not picked up") : STATUS_LABEL[d];
 
   return (
     <article className={`glass relative flex flex-col rounded-[2rem] p-5 sm:p-6 ${o.status === "new" ? "ring-2 ring-rose/50" : ""}`}>
@@ -70,7 +76,12 @@ export default function OrderCard({ order }: { order: Order }) {
             {orderCode(o.order_number)}
             {pending && <span className="spinner spinner-dark size-4" aria-label="Saving" />}
           </p>
-          <p className="text-sm text-cocoa-soft">{when(o.created_at)}</p>
+          <p className="text-sm text-cocoa-soft">
+            {when(o.created_at)}
+            {o.source && o.source !== "website" && (
+              <span className="ml-2 rounded-full bg-blush px-2 py-0.5 text-xs font-bold text-rose">via {SOURCE_LABEL[o.source]}</span>
+            )}
+          </p>
         </div>
         <div className="text-right">
           <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${STATUS_TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
@@ -81,17 +92,25 @@ export default function OrderCard({ order }: { order: Order }) {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 text-sm">
           <p className="font-bold">{o.customer_name}</p>
-          <a href={`tel:${o.phone}`} className="flex items-center gap-2 py-0.5 text-cocoa-soft hover:text-rose">
-            <Phone className="size-4 shrink-0" /> {o.phone}
-          </a>
-          <a
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex gap-2 py-0.5 text-cocoa-soft hover:text-rose"
-          >
-            <MapPin className="mt-0.5 size-4 shrink-0" /> <span className="whitespace-pre-line">{o.address}</span>
-          </a>
+          {o.phone && (
+            <a href={`tel:${o.phone}`} className="flex items-center gap-2 py-0.5 text-cocoa-soft hover:text-rose">
+              <Phone className="size-4 shrink-0" /> {o.phone}
+            </a>
+          )}
+          {pickup ? (
+            <p className="flex items-center gap-2 py-0.5 font-semibold text-cocoa-soft">
+              <Store className="size-4 shrink-0" /> Pickup
+            </p>
+          ) : (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex gap-2 py-0.5 text-cocoa-soft hover:text-rose"
+            >
+              <MapPin className="mt-0.5 size-4 shrink-0" /> <span className="whitespace-pre-line">{o.address}</span>
+            </a>
+          )}
           {o.notes && (
             <p className="flex gap-2 text-cocoa-soft">
               <StickyNote className="mt-0.5 size-4 shrink-0" /> {o.notes}
@@ -112,7 +131,7 @@ export default function OrderCard({ order }: { order: Order }) {
 
       <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="rounded-full bg-surface/60 px-3 py-1.5 font-semibold">
-          {PAYMENT_LABEL[o.payment_method]}
+          {pickup && o.payment_method === "cod" ? "Cash" : PAYMENT_LABEL[o.payment_method]}
           {o.payment_reference && <span className="text-cocoa-soft"> · Ref {o.payment_reference}</span>}
         </span>
         <button
@@ -138,7 +157,7 @@ export default function OrderCard({ order }: { order: Order }) {
               onClick={() => change({ status: s })}
               disabled={o.status === s || locked}
               aria-pressed={o.status === s}
-              title={locked ? "Mark as delivered first" : undefined}
+              title={locked ? (pickup ? "Mark as picked up first" : "Mark as delivered first") : undefined}
               className={`${segment} ${
                 o.status === "cancelled"
                   ? "bg-surface/40 text-cocoa-soft"
@@ -156,9 +175,9 @@ export default function OrderCard({ order }: { order: Order }) {
         })}
       </div>
 
-      <p className="mt-4 mb-2 text-xs font-bold tracking-wide text-cocoa-soft uppercase">Delivery</p>
-      <div className="grid grid-cols-3 gap-1.5">
-        {DELIVERY_STATUSES.map((d) => (
+      <p className="mt-4 mb-2 text-xs font-bold tracking-wide text-cocoa-soft uppercase">{pickup ? "Pickup" : "Delivery"}</p>
+      <div className={`grid gap-1.5 ${pickup ? "grid-cols-2" : "grid-cols-3"}`}>
+        {steps.map((d) => (
           <button
             key={d}
             onClick={() => change({ delivery_status: d })}
@@ -172,12 +191,12 @@ export default function OrderCard({ order }: { order: Order }) {
                   : "bg-surface/50 text-cocoa-soft hover:bg-surface/80 hover:text-cocoa"
             }`}
           >
-            {STATUS_LABEL[d]}
+            {stepLabel(d)}
           </button>
         ))}
       </div>
       {!delivered && o.status !== "cancelled" && (
-        <p className="mt-2 text-xs text-cocoa-soft">Completed unlocks once the order is marked Delivered.</p>
+        <p className="mt-2 text-xs text-cocoa-soft">Completed unlocks once the order is marked {pickup ? "Picked up" : "Delivered"}.</p>
       )}
 
       <div className="mt-3 flex min-h-11 items-center justify-between gap-3">

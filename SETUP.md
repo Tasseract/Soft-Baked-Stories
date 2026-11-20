@@ -6,6 +6,7 @@ Next.js storefront + owner dashboard. Orders are stored in Supabase and emailed 
 |---|---|
 | `/` | Storefront: menu, bag, checkout (cash on delivery or QR) |
 | `/admin` | Orders board: progress, delivery and payment status |
+| `/admin/pos` | POS mode: enter orders taken over Messenger, Facebook, Instagram, calls or walk-ins |
 | `/admin/finance` | Revenue, best sellers and payment split from completed orders |
 | `/admin/menu` | Edit prices and sizes, add or hide products, upload photos |
 | `/admin/settings` | Light / dark / automatic theme, delete all orders, reset the menu |
@@ -42,9 +43,11 @@ npm install
 npm run dev
 ```
 
+To try everything without touching real orders, `npm run dev:mock` starts the app on http://localhost:3006 against a stand-in database with sample orders (admin password: `preview`). It resets every time it stops.
+
 ## Changing the menu
 
-Use **Admin → Menu**. Products live in the `products` table and photos in the `product-images` bucket. The server always prices orders from the database, never from the browser. [`src/lib/menu.ts`](src/lib/menu.ts) holds the original menu, used for **Settings → Reset the menu** and as a fallback if the database can't be reached.
+Use **Admin → Menu**. The **Mix & Match Box** is edited there too: each row is a flavor pairing and its price, and customers only see pairings whose flavors are on the menu. Products live in the `products` table and photos in the `product-images` bucket. The server always prices orders from the database, never from the browser. [`src/lib/menu.ts`](src/lib/menu.ts) holds the original menu, used for **Settings → Reset the menu** and as a fallback if the database can't be reached.
 
 ## The QR code
 

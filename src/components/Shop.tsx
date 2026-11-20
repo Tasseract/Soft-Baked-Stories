@@ -3,8 +3,11 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Banknote, Check, CloudOff, Minus, Plus, QrCode, ShoppingBag, X } from "lucide-react";
-import { findOption, peso, type Product } from "@/lib/menu";
+import { Banknote, Check, CloudOff, Plus, QrCode, ShoppingBag, X } from "lucide-react";
+import Stepper from "./Stepper";
+import { newRef } from "@/lib/ref";
+import MixPicker, { initialPick } from "./MixPicker";
+import { findOption, isMixProduct, peso, type Product } from "@/lib/menu";
 
 type Cart = Record<string, number>; // "productId:optionId" -> quantity
 type Payment = "cod" | "qr";
@@ -41,7 +44,10 @@ export default function Shop({ products }: { products: Product[] }) {
       Object.entries(cart).flatMap(([key, quantity]) => {
         const [productId, optionId] = key.split(":");
         const found = findOption(products, productId, optionId);
-        return found && quantity > 0 ? [{ key, quantity, ...found }] : [];
+        if (!found || quantity <= 0) return [];
+        // A mixed box shows its first flavor's photo
+        const flavor = found.option.mix && products.find((p) => p.id === found.option.mix![0]);
+        return [{ key, quantity, ...found, image: flavor ? flavor.image : found.product.image }];
       }),
     [cart, products],
   );
@@ -89,9 +95,13 @@ export default function Shop({ products }: { products: Product[] }) {
       <div className="dotted-rule mt-6" />
 
       <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {shown.map((p) => (
-          <ProductCard key={p.id} product={p} cart={cart} setQty={setQty} />
-        ))}
+        {shown.map((p) =>
+          isMixProduct(p) ? (
+            <MixCard key={p.id} product={p} products={products} cart={cart} setQty={setQty} />
+          ) : (
+            <ProductCard key={p.id} product={p} cart={cart} setQty={setQty} />
+          ),
+        )}
       </div>
 
       {count > 0 && !open && (
@@ -180,35 +190,70 @@ function ProductCard({
   );
 }
 
-function Stepper({ qty, onChange, label }: { qty: number; onChange: (q: number) => void; label: string }) {
+function MixCard({
+  product,
+  products,
+  cart,
+  setQty,
+}: {
+  product: Product;
+  products: Product[];
+  cart: Cart;
+  setQty: (key: string, q: number) => void;
+}) {
+  const [pick, setPick] = useState(() => initialPick(product));
+  if (!pick) return null;
+  const key = `${product.id}:${pick.pair.id}`;
+  const qty = cart[key] ?? 0;
+  const image = (id: string) => products.find((p) => p.id === id)?.image;
+  const inBag = product.options.filter((o) => (cart[`${product.id}:${o.id}`] ?? 0) > 0);
+
   return (
-    <div className="flex items-center gap-1 rounded-full bg-surface/80 p-1 shadow-sm">
-      <button aria-label={`Remove one ${label}`} onClick={() => onChange(qty - 1)} className="grid size-9 place-items-center rounded-full hover:bg-blush active:scale-90">
-        <Minus className="size-4" />
-      </button>
-      <span className="w-6 text-center font-bold tabular-nums">{qty}</span>
-      <button
-        aria-label={`Add one ${label}`}
-        onClick={() => onChange(qty + 1)}
-        className="grid size-9 place-items-center rounded-full bg-rose text-white hover:bg-rose-deep active:scale-90"
-      >
-        <Plus className="size-4" />
-      </button>
-    </div>
+    <article className="glass group flex flex-col rounded-[2rem] p-5 ring-2 ring-rose/30 transition hover:-translate-y-1 sm:col-span-2 lg:col-span-1">
+      <div className="relative grid h-52 place-items-center">
+        <div className="absolute inset-x-8 bottom-3 h-6 rounded-full bg-cocoa/15 blur-xl" />
+        <span className="absolute top-0 left-0 z-10 rounded-full bg-rose px-3 py-1 text-xs font-bold tracking-wide text-white uppercase">Mix &amp; match</span>
+        <div className="relative flex h-full items-end justify-center">
+          {pick.flavors.map((id, i) => (
+            <Image
+              key={id + i}
+              src={image(id) ?? product.image}
+              alt=""
+              width={300}
+              height={300}
+              className={`pop-in max-h-44 w-auto object-contain drop-shadow-xl ${i === 0 ? "z-10 -mr-6 -rotate-6" : "-ml-6 mt-6 rotate-6"}`}
+            />
+          ))}
+        </div>
+      </div>
+      <h3 className="font-display mt-4 text-2xl font-bold">{product.name}</h3>
+      <p className="mt-1.5 text-sm leading-relaxed text-cocoa-soft">{product.description}</p>
+      <div className="mt-5 flex-1 space-y-3 rounded-2xl bg-surface/45 p-3">
+        <MixPicker product={product} products={products} onPick={(pair, flavors) => setPick({ pair, flavors })} />
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold tracking-wide text-cocoa-soft uppercase">Box · two flavors</span>
+          {qty === 0 ? (
+            <button
+              onClick={() => setQty(key, 1)}
+              className="flex min-h-10 items-center gap-1.5 rounded-full bg-cocoa px-4 py-2 text-sm font-bold text-cream transition hover:bg-rose hover:text-white active:scale-95"
+            >
+              <Plus className="size-4" /> Add
+            </button>
+          ) : (
+            <Stepper qty={qty} onChange={(q) => setQty(key, q)} label={pick.pair.label} />
+          )}
+        </div>
+      </div>
+      {inBag.length > 0 && (
+        <p className="mt-3 text-xs text-cocoa-soft">
+          In your bag: {inBag.map((o) => `${cart[`${product.id}:${o.id}`]}× ${o.label}`).join(", ")}
+        </p>
+      )}
+    </article>
   );
 }
 
-type Line = { key: string; quantity: number; product: Product; option: Product["options"][number] };
-
-// crypto.randomUUID only exists on https/localhost; fall back for testing over a local network
-function newRef() {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const b = crypto.getRandomValues(new Uint8Array(16));
-  b[6] = (b[6] & 0x0f) | 0x40;
-  b[8] = (b[8] & 0x3f) | 0x80;
-  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
+type Line = { key: string; quantity: number; product: Product; option: Product["options"][number]; image: string };
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -331,7 +376,7 @@ function Checkout({
               <ul className="space-y-3">
                 {lines.map((l) => (
                   <li key={l.key} className="flex items-center gap-3 rounded-2xl bg-surface/50 p-2 pr-3">
-                    <Image src={l.product.image} alt="" width={64} height={64} loading="eager" className="size-14 object-contain" />
+                    <Image src={l.image} alt="" width={64} height={64} loading="eager" className="size-14 object-contain" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-bold">{l.product.name}</p>
                       <p className="text-sm text-cocoa-soft">

@@ -27,21 +27,26 @@ export const toProduct = (r: ProductRow): Product => ({
   active: r.active,
 });
 
+async function fetchProducts() {
+  const { data, error } = await db().from("products").select("*").order("sort_order").order("created_at");
+  if (error) throw error;
+  return (data as ProductRow[]).map(toProduct);
+}
+
 // Errors are thrown inside the cached function so a failed lookup is never cached
 const cachedProducts = unstable_cache(
-  async () => {
-    const { data, error } = await db().from("products").select("*").order("sort_order").order("created_at");
-    if (error) throw error;
-    return (data as ProductRow[]).map(toProduct);
-  },
+  fetchProducts,
   ["products-v1"],
   { tags: [MENU_TAG], revalidate: 3600 },
 );
 
-/** Every product, including hidden ones. Falls back to the built-in menu if the database is unavailable. */
-export async function getAllProducts(): Promise<Product[]> {
+/**
+ * Every product, including hidden ones. Falls back to the built-in menu if the database is unavailable.
+ * `fresh` skips the cache, for when a cached copy might be behind what a customer was shown.
+ */
+export async function getAllProducts({ fresh = false } = {}): Promise<Product[]> {
   try {
-    const products = await cachedProducts();
+    const products = await (fresh ? fetchProducts() : cachedProducts());
     return products.length ? products : DEFAULT_PRODUCTS;
   } catch (err) {
     console.error("Menu lookup failed, using the built-in menu", err);
@@ -49,9 +54,21 @@ export async function getAllProducts(): Promise<Product[]> {
   }
 }
 
+/**
+ * Drops products that are hidden or have nothing to order, and mix & match pairings
+ * whose flavors are hidden or deleted.
+ */
+export function orderable(products: Product[], { includeHidden = false } = {}) {
+  const live = new Set(products.filter((p) => includeHidden || p.active !== false).map((p) => p.id));
+  return products
+    .filter((p) => live.has(p.id))
+    .map((p) => ({ ...p, options: p.options.filter((o) => !o.mix || o.mix.every((id) => live.has(id))) }))
+    .filter((p) => p.options.length > 0);
+}
+
 /** Products customers can order */
-export async function getMenu() {
-  return (await getAllProducts()).filter((p) => p.active !== false && p.options.length > 0);
+export async function getMenu({ fresh = false } = {}) {
+  return orderable(await getAllProducts({ fresh }));
 }
 
 export type ThemeMode = "light" | "dark" | "auto";

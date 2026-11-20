@@ -25,6 +25,21 @@ export type Order = {
   total: number;
   status: OrderStatus;
   delivery_status: DeliveryStatus;
+  source?: OrderSource;
+};
+
+export const ORDER_SOURCES = ["website", "messenger", "facebook", "instagram", "tiktok", "phone", "walk_in", "other"] as const;
+export type OrderSource = (typeof ORDER_SOURCES)[number];
+
+export const SOURCE_LABEL: Record<OrderSource, string> = {
+  website: "Website",
+  messenger: "Messenger",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  phone: "Text / call",
+  walk_in: "Walk-in",
+  other: "Other",
 };
 
 export const ORDER_STATUSES = ["new", "confirmed", "baking", "ready", "completed", "cancelled"] as const;

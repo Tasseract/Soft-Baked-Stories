@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, PiggyBank, Settings, UtensilsCrossed } from "lucide-react";
+import { ClipboardList, PiggyBank, ReceiptText, Settings, UtensilsCrossed } from "lucide-react";
 
 const links = [
   { href: "/admin", label: "Orders", icon: ClipboardList },
+  { href: "/admin/pos", label: "POS", icon: ReceiptText },
   { href: "/admin/finance", label: "Finance", icon: PiggyBank },
   { href: "/admin/menu", label: "Menu", icon: UtensilsCrossed },
   { href: "/admin/settings", label: "Settings", icon: Settings },
@@ -26,7 +27,7 @@ export default function AdminNav() {
               active ? "bg-rose text-white shadow" : "text-cocoa-soft hover:bg-surface/60 hover:text-cocoa"
             }`}
           >
-            <Icon className="size-5 sm:size-4" /> <span className={active ? "" : "hidden md:inline"}>{label}</span>
+            <Icon className="size-5 sm:size-4" /> <span className={active ? "" : "hidden lg:inline"}>{label}</span>
           </Link>
         );
       })}

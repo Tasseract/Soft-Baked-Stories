@@ -1,4 +1,10 @@
-export type Option = { id: string; label: string; price: number };
+export type Option = {
+  id: string;
+  label: string;
+  price: number;
+  /** Mix & match boxes: the two flavors (product ids) in this pairing */
+  mix?: [string, string];
+};
 
 export type Product = {
   id: string;
@@ -9,6 +15,25 @@ export type Product = {
   options: Option[];
   active?: boolean;
 };
+
+/** "S'mores Banana Muffins" → "S'mores Banana", for flavor pickers */
+export const flavorName = (name: string) => name.replace(/\s+muffins?$/i, "").trim() || name;
+
+/** The same pairing always gets the same id, whichever flavor was picked first */
+export const mixId = (a: string, b: string) => "mix-" + [a, b].sort().join("--");
+
+const DEFAULT_NAMES: Record<string, string> = {
+  "choco-lava-muffin": "Choco Lava",
+  "carrot-muffin": "Carrot",
+  "banana-muffin": "Banana",
+  "smores-banana-muffin": "S'mores Banana",
+};
+
+function mixOption(a: string, b: string, price: number): Option {
+  return { id: mixId(a, b), label: `${DEFAULT_NAMES[a]} + ${DEFAULT_NAMES[b]}`, price, mix: [a, b] };
+}
+
+export const isMixProduct = (p: Pick<Product, "options">) => p.options.some((o) => o.mix);
 
 // The original menu: seeds the database and stands in if the database can't be reached
 export const DEFAULT_PRODUCTS: Product[] = [
@@ -78,6 +103,20 @@ export const DEFAULT_PRODUCTS: Product[] = [
     category: "Breads",
     options: [{ id: "loaf", label: "Loaf", price: 120 }],
   },
+  {
+    id: "mix-and-match-box",
+    name: "Mix & Match Box",
+    description: "Can't pick just one? Choose two muffin flavors and we'll pack them together in one box.",
+    image: "/images/placeholder.svg",
+    category: "Muffins",
+    options: [
+      mixOption("smores-banana-muffin", "banana-muffin", 120),
+      mixOption("smores-banana-muffin", "choco-lava-muffin", 120),
+      mixOption("smores-banana-muffin", "carrot-muffin", 150),
+      mixOption("carrot-muffin", "banana-muffin", 120),
+      mixOption("carrot-muffin", "choco-lava-muffin", 120),
+    ],
+  },
 ];
 
 export function findOption(products: Product[], productId: string, optionId: string) {
@@ -98,3 +137,4 @@ export const slugify = (s: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
+

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, Camera, Check, Eye, EyeOff, Plus, Trash2, X } from "lucide-react";
-import { PLACEHOLDER_IMAGE, type Product } from "@/lib/menu";
+import { ArrowDown, ArrowUp, Blend, Camera, Check, ChevronDown, Eye, EyeOff, Plus, Trash2, X } from "lucide-react";
+import { PLACEHOLDER_IMAGE, flavorName, isMixProduct, type Product } from "@/lib/menu";
 import { deleteProduct, reorderProducts, saveProduct, uploadProductImage, type ProductInput } from "@/app/admin/menu-actions";
 
 type Draft = ProductInput & { key: string };
+type Flavor = { id: string; name: string; image: string };
 
 const blank = (key: string): Draft => ({
   key,
@@ -15,6 +16,17 @@ const blank = (key: string): Draft => ({
   active: true,
   options: [{ label: "Per piece", price: 0 }],
 });
+
+const blankMix = (key: string, flavors: Flavor[]): Draft => ({
+  key,
+  name: "Mix & Match Box",
+  description: "Can't pick just one? Choose two muffin flavors and we'll pack them together in one box.",
+  category: "Muffins",
+  active: true,
+  options: flavors.length >= 2 ? [{ label: "", price: 0, mix: [flavors[0].id, flavors[1].id] }] : [],
+});
+
+const newKey = () => crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
 
 const toInput = (p: Product): ProductInput => ({
   id: p.id,
@@ -30,6 +42,8 @@ export default function MenuEditor({ products, categories }: { products: Product
   const [ordered, setOrdered] = useOptimistic(products, (_cur, next: Product[]) => next);
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Flavors a mix & match box can pair up: every regular product
+  const flavors: Flavor[] = products.filter((p) => !isMixProduct(p)).map((p) => ({ id: p.id, name: flavorName(p.name), image: p.image }));
 
   function move(index: number, dir: -1 | 1) {
     const next = [...ordered];
@@ -50,12 +64,21 @@ export default function MenuEditor({ products, categories }: { products: Product
           <h1 className="font-display text-3xl font-bold">Menu</h1>
           <p className="mt-1 text-sm text-cocoa-soft">Changes show on the shop as soon as you save. Past orders keep the price they were placed at.</p>
         </div>
-        <button
-          onClick={() => setDrafts((d) => [blank(crypto.getRandomValues(new Uint32Array(1))[0].toString(36)), ...d])}
-          className="flex min-h-12 items-center gap-2 rounded-full bg-rose px-5 font-bold text-white shadow-lg shadow-rose/30 transition hover:bg-rose-deep active:scale-95"
-        >
-          <Plus className="size-5" /> Add product
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setDrafts((d) => [blankMix(newKey(), flavors), ...d])}
+            disabled={flavors.length < 2}
+            className="glass flex min-h-12 items-center gap-2 rounded-full px-5 font-bold transition active:scale-95 disabled:opacity-40"
+          >
+            <Blend className="size-5 text-rose" /> Add mix box
+          </button>
+          <button
+            onClick={() => setDrafts((d) => [blank(newKey()), ...d])}
+            className="flex min-h-12 items-center gap-2 rounded-full bg-rose px-5 font-bold text-white shadow-lg shadow-rose/30 transition hover:bg-rose-deep active:scale-95"
+          >
+            <Plus className="size-5" /> Add product
+          </button>
+        </div>
       </div>
       {error && <p className="mt-4 rounded-2xl bg-rose/10 px-4 py-3 text-sm font-semibold text-rose-deep">{error}</p>}
 
@@ -71,6 +94,7 @@ export default function MenuEditor({ products, categories }: { products: Product
             key={d.key}
             initial={d}
             image={PLACEHOLDER_IMAGE}
+            flavors={flavors}
             onDiscard={() => setDrafts((all) => all.filter((x) => x.key !== d.key))}
             onCreated={() => setDrafts((all) => all.filter((x) => x.key !== d.key))}
           />
@@ -80,6 +104,7 @@ export default function MenuEditor({ products, categories }: { products: Product
             key={p.id}
             initial={toInput(p)}
             image={p.image}
+            flavors={flavors.filter((f) => f.id !== p.id)}
             onMove={(dir) => move(i, dir)}
             canMoveUp={i > 0}
             canMoveDown={i < ordered.length - 1}
@@ -93,6 +118,7 @@ export default function MenuEditor({ products, categories }: { products: Product
 function ProductEditor({
   initial,
   image,
+  flavors,
   onMove,
   canMoveUp,
   canMoveDown,
@@ -101,6 +127,7 @@ function ProductEditor({
 }: {
   initial: ProductInput;
   image: string;
+  flavors: Flavor[];
   onMove?: (dir: -1 | 1) => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
@@ -113,7 +140,19 @@ function ProductEditor({
   const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isNew = !initial.id;
-  const dirty = JSON.stringify(form) !== JSON.stringify(initial);
+  const initialJson = JSON.stringify(initial);
+  const dirty = JSON.stringify(form) !== initialJson;
+
+  // After a save the server sends back the tidied-up product (trimmed names, pairing labels);
+  // take it as the new starting point unless the owner has kept typing since
+  const savedSnapshot = useRef<string | null>(null);
+  useEffect(() => {
+    if (savedSnapshot.current !== null && savedSnapshot.current === JSON.stringify(form)) {
+      savedSnapshot.current = null;
+      setForm(JSON.parse(initialJson));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the saved product comes back
+  }, [initialJson]);
 
   useEffect(() => {
     if (!confirmDelete) return;
@@ -133,9 +172,13 @@ function ProductEditor({
 
   function save() {
     setError(null);
+    savedSnapshot.current = JSON.stringify(form);
     startSave(async () => {
       const res = await saveProduct(form);
-      if (res.error) return setError(res.error);
+      if (res.error) {
+        savedSnapshot.current = null;
+        return setError(res.error);
+      }
       setSaved(true);
       if (isNew) onCreated?.();
     });
@@ -150,11 +193,21 @@ function ProductEditor({
   }
 
   const hidden = !form.active;
+  const mix = form.options.some((o) => o.mix);
 
   return (
     <article className={`glass flex flex-col gap-4 rounded-[2rem] p-5 sm:p-6 ${isNew ? "ring-2 ring-rose/50" : ""} ${hidden ? "opacity-80" : ""}`}>
       <div className="flex gap-4">
-        <PhotoPicker productId={initial.id} image={image} />
+        {mix ? (
+          <div className="flex w-28 shrink-0 flex-col items-center gap-1.5 sm:w-32">
+            <div className="relative grid aspect-square w-full place-items-center overflow-hidden rounded-2xl bg-surface/50">
+              <Blend className="size-10 text-rose" />
+            </div>
+            <p className="text-center text-[11px] leading-tight text-cocoa-soft">The shop shows the two chosen flavors&apos; photos</p>
+          </div>
+        ) : (
+          <PhotoPicker productId={initial.id} image={image} />
+        )}
         <div className="min-w-0 flex-1 space-y-2">
           <input
             value={form.name}
@@ -195,6 +248,9 @@ function ProductEditor({
         className="field resize-none text-sm"
       />
 
+      {mix ? (
+        <PairsEditor options={form.options} flavors={flavors} onChange={(options) => set("options", options)} />
+      ) : (
       <div>
         <p className="mb-2 text-xs font-bold tracking-wide text-cocoa-soft uppercase">Sizes &amp; prices</p>
         <div className="space-y-2">
@@ -240,6 +296,7 @@ function ProductEditor({
           <Plus className="size-4" /> Add size
         </button>
       </div>
+      )}
 
       {error && <p className="rounded-2xl bg-rose/10 px-4 py-2.5 text-sm font-semibold text-rose-deep">{error}</p>}
 
@@ -363,5 +420,88 @@ function PhotoPicker({ productId, image }: { productId?: string; image: string }
       {error && <p className="text-center text-[11px] leading-tight font-semibold text-rose-deep">{error}</p>}
       <input ref={input} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
     </div>
+  );
+}
+
+type PairOption = ProductInput["options"][number];
+
+/** Rows of "[flavor ▾] + [flavor ▾] = ₱price" for a mix & match box */
+function PairsEditor({ options, flavors, onChange }: { options: PairOption[]; flavors: Flavor[]; onChange: (o: PairOption[]) => void }) {
+  const key = (o: PairOption) => [...(o.mix ?? [])].sort().join("|");
+  const update = (i: number, patch: Partial<PairOption>) => onChange(options.map((o, n) => (n === i ? { ...o, ...patch } : o)));
+
+  function addPair() {
+    const used = new Set(options.map(key));
+    for (const a of flavors)
+      for (const b of flavors)
+        if (a.id !== b.id && !used.has([a.id, b.id].sort().join("|"))) return onChange([...options, { label: "", price: 0, mix: [a.id, b.id] }]);
+  }
+
+  const counts = new Map<string, number>();
+  options.forEach((o) => counts.set(key(o), (counts.get(key(o)) ?? 0) + 1));
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-bold tracking-wide text-cocoa-soft uppercase">Flavor pairings &amp; prices</p>
+      <div className="space-y-2">
+        {options.map((o, i) => {
+          const [a, b] = o.mix ?? ["", ""];
+          const problem = a === b ? "Pick two different flavors" : (counts.get(key(o)) ?? 0) > 1 ? "Listed twice" : null;
+          return (
+            <div key={i}>
+              <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                <FlavorSelect value={a} flavors={flavors} onChange={(v) => update(i, { mix: [v, b] })} />
+                <span className="font-display text-lg font-bold text-rose">+</span>
+                <FlavorSelect value={b} flavors={flavors} onChange={(v) => update(i, { mix: [a, v] })} />
+                <span className="font-display text-lg font-bold text-rose">=</span>
+                <label className="relative w-28 shrink-0">
+                  <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 font-bold text-cocoa-soft">₱</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={100000}
+                    value={o.price || ""}
+                    onChange={(e) => update(i, { price: Number(e.target.value) })}
+                    placeholder="0"
+                    aria-label="Price for this pairing"
+                    className="field pl-7 text-right font-bold tabular-nums"
+                  />
+                </label>
+                <button
+                  onClick={() => onChange(options.filter((_, n) => n !== i))}
+                  disabled={options.length === 1}
+                  aria-label="Remove pairing"
+                  className="grid size-11 shrink-0 place-items-center rounded-full text-cocoa-soft hover:bg-surface/60 hover:text-rose-deep disabled:opacity-30"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              {problem && <p className="mt-1 text-xs font-semibold text-rose-deep">{problem}</p>}
+            </div>
+          );
+        })}
+      </div>
+      <button onClick={addPair} className="mt-2 flex min-h-10 items-center gap-1.5 rounded-full px-3 text-sm font-bold text-rose hover:bg-surface/50">
+        <Plus className="size-4" /> Add pairing
+      </button>
+    </div>
+  );
+}
+
+function FlavorSelect({ value, flavors, onChange }: { value: string; flavors: Flavor[]; onChange: (v: string) => void }) {
+  return (
+    <label className="relative min-w-0 flex-1 basis-32">
+      <span className="sr-only">Flavor</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="field min-h-11 cursor-pointer appearance-none pr-8 text-sm font-bold">
+        {!flavors.some((f) => f.id === value) && <option value={value}>(removed flavor)</option>}
+        {flavors.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-cocoa-soft" />
+    </label>
   );
 }

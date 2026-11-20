@@ -163,3 +163,29 @@ end $$;
 
 revoke execute on function public.purge_orders() from public, anon, authenticated;
 grant execute on function public.purge_orders() to service_role;
+
+-- ─── Added: Mix & Match Box and order sources ───────────────────────────────
+
+-- A product whose sizes are flavor pairings: each option carries "mix": [flavor product id, flavor product id]
+insert into public.products (id, name, description, category, image_url, options, sort_order) values
+  ('mix-and-match-box', 'Mix & Match Box',
+   'Can''t pick just one? Choose two muffin flavors and we''ll pack them together in one box.',
+   'Muffins', null,
+   '[{"id":"mix-banana-muffin--smores-banana-muffin","label":"S''mores Banana + Banana","price":120,"mix":["smores-banana-muffin","banana-muffin"]},
+     {"id":"mix-choco-lava-muffin--smores-banana-muffin","label":"S''mores Banana + Choco Lava","price":120,"mix":["smores-banana-muffin","choco-lava-muffin"]},
+     {"id":"mix-carrot-muffin--smores-banana-muffin","label":"S''mores Banana + Carrot","price":150,"mix":["smores-banana-muffin","carrot-muffin"]},
+     {"id":"mix-banana-muffin--carrot-muffin","label":"Carrot + Banana","price":120,"mix":["carrot-muffin","banana-muffin"]},
+     {"id":"mix-carrot-muffin--choco-lava-muffin","label":"Carrot + Choco Lava","price":120,"mix":["carrot-muffin","choco-lava-muffin"]}]',
+   45)
+on conflict (id) do nothing;
+
+-- Where an order came from: the website, or entered by the owner in POS mode
+alter table public.orders add column if not exists source text not null default 'website';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'orders_source_check' and conrelid = 'public.orders'::regclass) then
+    alter table public.orders
+      add constraint orders_source_check
+      check (source in ('website', 'messenger', 'facebook', 'instagram', 'tiktok', 'phone', 'walk_in', 'other'));
+  end if;
+end $$;

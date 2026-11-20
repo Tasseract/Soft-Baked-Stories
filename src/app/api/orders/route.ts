@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { findOption } from "@/lib/menu";
 import { getMenu } from "@/lib/catalog";
 import { db } from "@/lib/supabase";
+import { insertOrder } from "@/lib/order-store";
 import { sendOrderEmail } from "@/lib/email";
 import type { Order, OrderItem } from "@/lib/orders";
 import { orderCode } from "@/lib/orders";
@@ -37,9 +38,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Please enter your payment reference number." }, { status: 400 });
 
   // Prices always come from the server-side menu, never from the browser
-  const menu = await getMenu();
+  const requested = Array.isArray(body.items) ? body.items.slice(0, 30) : [];
+  let menu = await getMenu();
+  // Something in the bag isn't in the cached menu (it may have just been added): check the database itself
+  if (requested.some((raw) => !findOption(menu, String(raw?.product_id), String(raw?.option)))) menu = await getMenu({ fresh: true });
   const items: OrderItem[] = [];
-  for (const raw of Array.isArray(body.items) ? body.items.slice(0, 30) : []) {
+  for (const raw of requested) {
     const found = findOption(menu, String(raw?.product_id), String(raw?.option));
     const quantity = Math.floor(Number(raw?.quantity));
     if (!found || !(quantity >= 1 && quantity <= 99)) continue;
@@ -58,13 +62,7 @@ export async function POST(req: Request) {
 
   let data: Order | null = null;
   try {
-    const row = { customer_name, phone, address, notes, payment_method, payment_reference, items, total, client_ref };
-    let res = await db().from("orders").insert(row).select().single<Order>();
-    if (res.error?.code === "PGRST204") {
-      // Database not yet updated with the client_ref column: save the order without it
-      const { client_ref: _, ...legacy } = row;
-      res = await db().from("orders").insert(legacy).select().single<Order>();
-    }
+    const res = await insertOrder({ customer_name, phone, address, notes, payment_method, payment_reference, items, total, client_ref });
     if (res.error?.code === "23505" && client_ref) {
       // A retry of a checkout that already went through: answer with the order we saved the first time
       const existing = await db().from("orders").select("order_number").eq("client_ref", client_ref).single();
