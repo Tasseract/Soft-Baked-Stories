@@ -15,6 +15,8 @@ export type Order = {
   updated_at: string;
   completed_at: string | null;
   customer_name: string;
+  customer_email?: string | null;
+  paid_email_sent_at?: string | null;
   phone: string;
   address: string;
   notes: string | null;

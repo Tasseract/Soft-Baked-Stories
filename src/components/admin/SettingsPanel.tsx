@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Monitor, Moon, Sun, TriangleAlert } from "lucide-react";
+import { Check, Mail, Monitor, Moon, Sun, TriangleAlert } from "lucide-react";
 import type { ThemeMode } from "@/lib/catalog";
 import { purgeOrders, resetMenu, saveTheme } from "@/app/admin/settings-actions";
 
@@ -11,7 +11,9 @@ const THEMES: { value: ThemeMode; label: string; hint: string; icon: typeof Sun 
   { value: "auto", label: "Automatic", hint: "Follows each visitor's device", icon: Monitor },
 ];
 
-export default function SettingsPanel({ theme }: { theme: ThemeMode }) {
+type EmailStatus = { ready: boolean; from: string | null; alertsTo: string | null };
+
+export default function SettingsPanel({ theme, email }: { theme: ThemeMode; email: EmailStatus }) {
   const [selected, setSelected] = useState(theme);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +68,36 @@ export default function SettingsPanel({ theme }: { theme: ThemeMode }) {
           })}
         </div>
         {error && <p className="mt-3 text-sm font-semibold text-rose-deep">{error}</p>}
+      </section>
+
+      <section className="glass rounded-[2rem] p-5 sm:p-6">
+        <div className="flex items-center gap-2">
+          <Mail className="size-5 text-rose" />
+          <h2 className="font-display text-xl font-semibold">Emails</h2>
+          <span className={`ml-auto rounded-full px-3 py-1 text-xs font-bold ${email.ready ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+            {email.ready ? "On" : "Not set up"}
+          </span>
+        </div>
+        {email.ready ? (
+          <ul className="mt-3 space-y-1 text-sm text-cocoa-soft">
+            {email.from && (
+              <li>
+                Sent from <b className="text-cocoa">{email.from}</b>
+              </li>
+            )}
+            {email.alertsTo && (
+              <li>
+                New-order alerts go to <b className="text-cocoa">{email.alertsTo}</b>
+              </li>
+            )}
+            <li>Customers who leave an email get an order confirmation, and a payment confirmation when a QR order is marked Paid.</li>
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm text-cocoa-soft">
+            Orders still work, but no emails are sent. Add <code className="rounded bg-surface/70 px-1">GMAIL_USER</code> and{" "}
+            <code className="rounded bg-surface/70 px-1">GMAIL_APP_PASSWORD</code> in Vercel&apos;s environment variables, then redeploy. SETUP.md has the steps.
+          </p>
+        )}
       </section>
 
       <section className="glass rounded-[2rem] p-5 ring-2 ring-rose-deep/30 sm:p-6">

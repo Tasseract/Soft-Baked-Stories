@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { notifyNewOrder, validEmail } from "@/lib/email";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { getAllProducts, orderable } from "@/lib/catalog";
@@ -12,6 +14,7 @@ export type PosOrderInput = {
   client_ref: string;
   items: { product_id: string; option: string; quantity: number }[];
   customer_name: string;
+  customer_email: string;
   phone: string;
   address: string;
   pickup: boolean;
@@ -33,6 +36,8 @@ export async function createPosOrder(input: PosOrderInput): Promise<{ code?: str
   const pickup = !!input.pickup;
   const address = pickup ? "Pickup" : text(input.address, 400);
   if (!address) return { error: "Add a delivery address, or switch to Pickup." };
+  const email = text(input.customer_email, 120).toLowerCase();
+  if (email && !validEmail(email)) return { error: "Check the email address." };
   const source = (ORDER_SOURCES as readonly string[]).includes(input.source) ? input.source : "other";
   const payment_method = input.payment_method === "qr" ? "qr" : "cod";
 
@@ -58,6 +63,7 @@ export async function createPosOrder(input: PosOrderInput): Promise<{ code?: str
   const client_ref = /^[0-9a-f-]{36}$/i.test(input.client_ref) ? input.client_ref : null;
   const res = await insertOrder({
     customer_name,
+    customer_email: email || null,
     phone: text(input.phone, 20),
     address,
     notes: text(input.notes, 300) || null,
@@ -79,5 +85,8 @@ export async function createPosOrder(input: PosOrderInput): Promise<{ code?: str
   if (res.error || !res.data) return { error: "Couldn't save the order. Check your connection and try again." };
 
   revalidatePath("/admin", "layout");
+  // The owner entered this order, so only the customer needs an email (if they gave one)
+  const saved = res.data;
+  after(() => notifyNewOrder(saved, { alertOwner: false }));
   return { code: orderCode(res.data.order_number) };
 }

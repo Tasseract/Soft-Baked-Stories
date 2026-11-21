@@ -4,6 +4,7 @@ import type { Order } from "@/lib/orders";
 import SetupNotice from "@/components/admin/SetupNotice";
 import OrderCard from "@/components/admin/OrderCard";
 import { dayKey } from "@/lib/format";
+import { emailConfigured } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       ) : (
         <div className="mt-6 grid gap-5 lg:grid-cols-2">
           {orders.map((o) => (
-            <OrderCard key={o.id} order={o} />
+            <OrderCard key={o.id} order={o} emailReady={emailConfigured()} />
           ))}
         </div>
       )}

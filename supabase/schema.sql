@@ -189,3 +189,10 @@ begin
       check (source in ('website', 'messenger', 'facebook', 'instagram', 'tiktok', 'phone', 'walk_in', 'other'));
   end if;
 end $$;
+
+-- ─── Added: customer emails ──────────────────────────────────────────────────
+
+-- Where the order confirmation and payment confirmation emails go (optional)
+alter table public.orders add column if not exists customer_email text;
+-- Set once the "payment received" email has gone out, so toggling Paid never sends it twice
+alter table public.orders add column if not exists paid_email_sent_at timestamptz;

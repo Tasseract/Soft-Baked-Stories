@@ -1,6 +1,6 @@
 # Setup
 
-Next.js storefront + owner dashboard. Orders are stored in Supabase and emailed to the owner through Resend.
+Next.js storefront + owner dashboard. Orders are stored in Supabase; order and payment emails go out through the shop's Gmail.
 
 | Page | What it is |
 |---|---|
@@ -25,12 +25,28 @@ Copy `.env.example` to `.env.local` for local development, and add the same valu
 |---|---|
 | `SUPABASE_URL` | Supabase → Project Settings → Data API → Project URL |
 | `SUPABASE_SECRET_KEY` | Supabase → Project Settings → API Keys → Secret key (`sb_secret_…`) |
-| `RESEND_API_KEY` | resend.com → API Keys |
-| `ORDER_EMAIL_TO` | The owner's inbox. On Resend's free plan without a verified domain, this must be the email you signed up to Resend with. |
+| `GMAIL_USER` | The shop's Gmail address that emails are sent from |
+| `GMAIL_APP_PASSWORD` | A Google App Password for that account (see **Emails** below) |
+| `ORDER_EMAIL_TO` | Optional. Where new-order alerts go; defaults to `GMAIL_USER` |
 | `ADMIN_PASSWORD` | Any strong password; the owner types it at `/admin` |
-| `ORDER_EMAIL_FROM` | Optional. Only after verifying a domain in Resend, e.g. `Soft Baked Stories <orders@yourdomain.com>` |
 
-If the Resend variables are empty, orders are still saved and appear in the dashboard; only the email is skipped.
+If the Gmail variables are empty, orders still work and show on the dashboard; only the emails are skipped. Admin → Settings shows whether emails are on.
+
+## Emails
+
+| When | Who gets it |
+|---|---|
+| A customer places an order | The owner (new-order alert) and the customer, if they left an email (order confirmation with payment instructions) |
+| The owner enters an order in POS | The customer, if an email was entered |
+| A QR order is marked **Paid** on the Orders board | The customer, if they left an email (payment confirmation). Sent once per order, even if Paid is toggled again |
+
+Setting up the shop's Gmail (free, about 500 emails a day):
+
+1. Use a Gmail account for the shop and turn on **2-Step Verification** at https://myaccount.google.com/security.
+2. Open https://myaccount.google.com/apppasswords, create an App Password named "Soft Baked Stories", and copy the 16 characters.
+3. In Vercel → Settings → Environment Variables add `GMAIL_USER` (the Gmail address) and `GMAIL_APP_PASSWORD` (the 16 characters), then redeploy.
+
+Customers' replies go to the shop's Gmail.
 
 ## 3. Deploy
 
@@ -43,12 +59,12 @@ npm install
 npm run dev
 ```
 
-To try everything without touching real orders, `npm run dev:mock` starts the app on http://localhost:3006 against a stand-in database with sample orders (admin password: `preview`). It resets every time it stops.
+To try everything without touching real orders, `npm run dev:mock` starts the app on http://localhost:3006 against a stand-in database with sample orders (admin password: `preview`). Emails are written to `.email-previews/` as HTML files instead of being sent. It resets every time it stops.
 
 ## Changing the menu
 
 Use **Admin → Menu**. The **Mix & Match Box** is edited there too: each row is a flavor pairing and its price, and customers only see pairings whose flavors are on the menu. Products live in the `products` table and photos in the `product-images` bucket. The server always prices orders from the database, never from the browser. [`src/lib/menu.ts`](src/lib/menu.ts) holds the original menu, used for **Settings → Reset the menu** and as a fallback if the database can't be reached.
 
-## The QR code
+## The payment QR
 
-The QR shown at checkout is a placeholder. To use a real GCash/Maya QR, save it as `public/images/payment-qr.png` and swap the `<QRCodeSVG … />` in [`src/components/Shop.tsx`](src/components/Shop.tsx) for an `<Image src="/images/payment-qr.png" … />`.
+Checkout shows the shop's InstaPay QR from `public/images/payment-qr.jpg`. To change it, replace that file with the new QR (keep the name) and push.

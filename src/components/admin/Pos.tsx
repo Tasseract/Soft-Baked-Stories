@@ -15,7 +15,7 @@ type Ticket = Record<string, number>; // "productId:optionId" -> quantity
 
 const POS_SOURCES = ORDER_SOURCES.filter((s) => s !== "website");
 
-const emptyCustomer = { name: "", phone: "", address: "", notes: "", reference: "" };
+const emptyCustomer = { name: "", email: "", phone: "", address: "", notes: "", reference: "" };
 
 export default function Pos({ products }: { products: Product[] }) {
   const [ticket, setTicket] = useState<Ticket>({});
@@ -69,6 +69,7 @@ export default function Pos({ products }: { products: Product[] }) {
           client_ref: ref,
           items: lines.map((l) => ({ product_id: l.product.id, option: l.option.id, quantity: l.quantity })),
           customer_name: customer.name,
+          customer_email: customer.email,
           phone: customer.phone,
           address: customer.address,
           pickup,
@@ -192,6 +193,7 @@ export default function Pos({ products }: { products: Product[] }) {
           <p className="text-xs font-bold tracking-wide text-cocoa-soft uppercase">Customer</p>
           <input {...field("name")} maxLength={80} placeholder="Name or chat handle *" className="field" />
           <input {...field("phone")} type="tel" inputMode="tel" maxLength={20} placeholder="Mobile number (optional)" className="field" />
+          <input {...field("email")} type="email" inputMode="email" maxLength={120} placeholder="Email (optional) — sends them a receipt" className="field" />
           <Segmented
             value={pickup ? "pickup" : "delivery"}
             onChange={(v) => setPickup(v === "pickup")}

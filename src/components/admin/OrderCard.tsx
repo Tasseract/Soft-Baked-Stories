@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useOptimistic, useState, useTransition } from "react";
-import { Lock, MapPin, Phone, StickyNote, Store } from "lucide-react";
+import { Lock, Mail, MapPin, Phone, StickyNote, Store } from "lucide-react";
 import { peso } from "@/lib/menu";
 import { when } from "@/lib/format";
 import {
@@ -32,7 +32,7 @@ const STATUS_TONE: Record<OrderStatus, string> = {
 const segment =
   "min-h-12 rounded-xl px-1 text-xs font-bold transition active:scale-95 sm:text-sm disabled:active:scale-100";
 
-export default function OrderCard({ order }: { order: Order }) {
+export default function OrderCard({ order, emailReady }: { order: Order; emailReady: boolean }) {
   // The card shows a change the moment it's tapped; the save happens in the background
   const [o, setOptimistic] = useOptimistic(order, (cur: Order, patch: OrderPatch) => ({ ...cur, ...patch }));
   const [pending, startTransition] = useTransition();
@@ -92,6 +92,11 @@ export default function OrderCard({ order }: { order: Order }) {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 text-sm">
           <p className="font-bold">{o.customer_name}</p>
+          {o.customer_email && (
+            <a href={`mailto:${o.customer_email}`} className="flex items-center gap-2 py-0.5 break-all text-cocoa-soft hover:text-rose">
+              <Mail className="size-4 shrink-0" /> {o.customer_email}
+            </a>
+          )}
           {o.phone && (
             <a href={`tel:${o.phone}`} className="flex items-center gap-2 py-0.5 text-cocoa-soft hover:text-rose">
               <Phone className="size-4 shrink-0" /> {o.phone}
@@ -144,6 +149,19 @@ export default function OrderCard({ order }: { order: Order }) {
           {STATUS_LABEL[o.payment_status]}
         </button>
       </div>
+      {o.payment_method === "qr" && (
+        <p className="mt-2 text-xs text-cocoa-soft">
+          {!o.customer_email
+            ? "No email on file, so no payment confirmation is sent."
+            : o.paid_email_sent_at
+              ? `✓ Payment confirmation emailed to ${o.customer_email}.`
+              : o.payment_status === "paid"
+                ? "No payment confirmation was emailed for this order."
+                : emailReady
+                  ? `Check that ${peso(o.total)} arrived, then tap Unpaid to mark it Paid. That emails ${o.customer_email} a confirmation.`
+                  : "Emails aren't set up yet, so marking it Paid won't email the customer (see Settings)."}
+        </p>
+      )}
 
       <div className="dotted-rule my-5" />
 

@@ -2,8 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
-import { Banknote, Check, CloudOff, Plus, QrCode, ShoppingBag, X } from "lucide-react";
+import { Banknote, Check, CloudOff, Download, Plus, QrCode, ShoppingBag, X } from "lucide-react";
 import Stepper from "./Stepper";
 import { newRef } from "@/lib/ref";
 import MixPicker, { initialPick } from "./MixPicker";
@@ -328,6 +327,7 @@ function Checkout({
         client_ref: clientRef,
         items: lines.map((l) => ({ product_id: l.product.id, option: l.option.id, quantity: l.quantity })),
         customer_name: form.get("name"),
+        customer_email: form.get("email"),
         phone: form.get("phone"),
         address: form.get("address"),
         notes: form.get("notes"),
@@ -402,6 +402,15 @@ function Checkout({
                   placeholder="Mobile number (0917 123 4567)"
                   className="field"
                 />
+                <input
+                  name="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  maxLength={120}
+                  placeholder="Email (optional) — for your order confirmation"
+                  className="field"
+                />
                 <textarea name="address" required maxLength={400} rows={3} autoComplete="street-address" placeholder="Complete delivery address" className="field resize-none" />
                 <input name="notes" maxLength={300} placeholder="Notes (optional) — landmarks, preferred time…" className="field" />
                 {/* Honeypot: real customers never see or fill this */}
@@ -431,14 +440,23 @@ function Checkout({
                 </div>
                 {payment === "qr" && (
                   <div className="mt-4 flex flex-col items-center rounded-2xl bg-surface/70 p-5 text-center">
+                    {/* The QR stays on white so every banking app can read it, in dark mode too */}
                     <div className="rounded-2xl bg-white p-3 shadow-sm">
-                      <QRCodeSVG value={`SOFTBAKEDSTORIES-MOCK|amount=${total}`} size={168} fgColor="#4a2b20" />
+                      <Image src="/images/payment-qr.jpg" alt="InstaPay QR code for Soft Baked Stories" width={452} height={440} className="w-48 sm:w-52" />
                     </div>
                     <p className="mt-3 text-sm text-cocoa-soft">
-                      Scan to pay <b className="text-cocoa">{peso(total)}</b>, then enter the reference number below.
+                      Scan with GCash, Maya or your bank app (InstaPay) and send exactly <b className="text-cocoa">{peso(total)}</b>.
                     </p>
-                    <span className="mt-1 rounded-full bg-blush px-2 py-0.5 text-[11px] font-bold tracking-wide text-rose uppercase">Demo QR — not a real account</span>
-                    <input name="reference" required maxLength={60} placeholder="Payment reference number" className="field mt-4 text-center" />
+                    {/* Customers ordering on their phone can't scan their own screen: save it and upload it in the app */}
+                    <a
+                      href="/images/payment-qr.jpg"
+                      download="soft-baked-stories-instapay-qr.jpg"
+                      className="mt-3 flex min-h-10 items-center gap-1.5 rounded-full bg-surface/80 px-4 text-sm font-bold text-rose active:scale-95"
+                    >
+                      <Download className="size-4" /> Save QR to upload in your app
+                    </a>
+                    <input name="reference" required maxLength={60} placeholder="Reference number from your payment" className="field mt-4 text-center" />
+                    <p className="mt-2 text-xs text-cocoa-soft">We&apos;ll check your payment. Add your email above and we&apos;ll send a confirmation once it&apos;s received.</p>
                   </div>
                 )}
               </div>

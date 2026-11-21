@@ -3,9 +3,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { notifyPaymentConfirmed } from "@/lib/email";
 import { SESSION_COOKIE, requireAdmin, safeEqual, sessionToken } from "@/lib/auth";
 import { db } from "@/lib/supabase";
-import { applyOrderPatch, type OrderPatch } from "@/lib/orders";
+import { applyOrderPatch, type Order, type OrderPatch } from "@/lib/orders";
 
 export async function login(_: string | null, form: FormData) {
   const password = String(form.get("password") ?? "");
@@ -32,19 +34,27 @@ export async function logout() {
 
 export async function updateOrder(id: string, patch: OrderPatch): Promise<{ error?: string }> {
   await requireAdmin();
-  const { data: current, error: readError } = await db()
-    .from("orders")
-    .select("status, delivery_status, payment_method")
-    .eq("id", id)
-    .single();
+  const { data: current, error: readError } = await db().from("orders").select("*").eq("id", id).single<Order>();
   if (readError || !current) return { error: "Couldn't find that order. Refresh and try again." };
 
   const result = applyOrderPatch(current, patch);
   if ("error" in result) return result;
   if (Object.keys(result.patch).length === 0) return {};
 
-  const { error } = await db().from("orders").update(result.patch).eq("id", id);
-  if (error) return { error: "Couldn't save that change. Check your connection and try again." };
+  const { data: updated, error } = await db().from("orders").update(result.patch).eq("id", id).select().single<Order>();
+  if (error || !updated) return { error: "Couldn't save that change. Check your connection and try again." };
+
+  // A QR payment the owner has just checked: email the customer, once
+  const justPaid = result.patch.payment_status === "paid" && current.payment_status !== "paid";
+  if (justPaid && updated.payment_method === "qr" && !updated.paid_email_sent_at) {
+    after(async () => {
+      if (await notifyPaymentConfirmed(updated)) {
+        await db().from("orders").update({ paid_email_sent_at: new Date().toISOString() }).eq("id", id);
+        revalidatePath("/admin", "layout");
+      }
+    });
+  }
+
   revalidatePath("/admin", "layout");
   return {};
 }
